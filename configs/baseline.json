@@ -1,0 +1,5 @@
+{
+  "run_id": "baseline_smooth50",
+  "evidence": "ball_nearest",
+  "decoder": {"name": "majority", "window": 50}
+}

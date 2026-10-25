@@ -1,0 +1,7 @@
+{
+  "run_id": "filled_t12_smooth50",
+  "uses_broadcast": true,
+  "evidence": "ball_filled",
+  "tiers": [1, 2],
+  "decoder": {"name": "majority", "window": 50, "min_anchor": 1, "tie": "previous"}
+}
