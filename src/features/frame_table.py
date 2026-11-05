@@ -29,8 +29,9 @@ from games import GAME, GAMES, asset_paths, half_video_blocks, source_frames  # 
 from starter import load_smart_tagging  # noqa: E402
 from src.data import atd  # noqa: E402
 from src.data.atd import AWAY, HOME  # noqa: E402
+from src.tracking import MetricaATDAdapter, TrackingFeatureEngine  # noqa: E402
 
-SCHEMA_VERSION = "v0"
+SCHEMA_VERSION = "v1"
 
 # Tagged-team text -> 0 home / 1 away. Lower-cased; N/A (and anything unlisted) means "no team".
 TEAM_TAG = {"barcelona": HOME, "atletic club": AWAY, "athletic club": AWAY}
@@ -55,6 +56,16 @@ SHAPE_COLS = (("dline_m", "defensive line: mean metres-from-own-goal of the 2nd-
               ("cen_m", "outfield centroid: mean metres-from-own-goal of all on-pitch tracks except the deepest"),
               ("fwd_m", "forward line: mean metres-from-own-goal of the 3 most advanced tracks after trimming the single most advanced"),
               ("line_gap_m", "fwd_m - dline_m: how stretched the team is between its lines"))
+
+TRACKING_FEATURE_COLS = (
+    ("defensive_line_position_m", "defensive line position, metres from own goal; mean of the 2nd-5th deepest visible tracks"),
+    ("midfield_line_position_m", "midfield line position, metres from own goal; median visible outfield position after excluding the deepest track"),
+    ("forward_line_position_m", "forward line position, metres from own goal; mean of three most advanced tracks after excluding the highest"),
+    ("team_width_m", "lateral 10th-to-90th percentile width of visible tracks, metres"),
+    ("shape_quality", "observation quality 0..1; 0 below seven visible tracks, then clip((tracks - 5) / 5, 0, 1)"),
+    ("defensive_line_velocity_mps", "centred-window defensive line velocity in attacking direction; NaN at edges or when shape is insufficient"),
+    ("midfield_line_velocity_mps", "centred-window midfield line velocity in attacking direction; NaN at edges or when shape is insufficient"),
+)
 
 SCHEMA = [
     ("frame", "int32", "tactical video frame, 0-based; `frame_id - 1` in the ATD. Row i has frame == i"),
@@ -93,7 +104,8 @@ SCHEMA = [
     ("home_shape_conf", "float32", "reliability 0..1 of the home shape columns: clip((on-pitch tracks - 5) / 5, 0, 1); 0 if fewer than 7 tracks (columns NaN)"),
     ("away_shape_conf", "float32", "reliability 0..1 of the away shape columns (same rule)"),
     ("tag_poss_hint", "int8", "weak possession hint from Smart Tagging phases: +1 home, -1 away, 0 none or conflicting (automatic tags, noisy)"),
-]
+] + [("{}_{}".format(t, c), "float32", "{}: {}".format(t, d))
+     for t in ("home", "away") for c, d in TRACKING_FEATURE_COLS]
 COLUMNS = [name for name, _, _ in SCHEMA]
 
 def _defaults(blocks, kickoffs):
@@ -238,6 +250,9 @@ def build_table(data_dir=None, n_frames=None, blocks=None, kickoffs=None):
             cols["{}_{}".format(name, c)] = v
         cols[name + "_shape_conf"] = conf
 
+    tracking = MetricaATDAdapter(slots, right, length, width, GAMES[GAME]["fps"]).load()
+    cols.update(TrackingFeatureEngine(tracking).build_features())
+
     table = pd.DataFrame({name: np.asarray(cols[name]).astype(dtype) for name, dtype, _ in SCHEMA})
     slot_arrays = {"x": slots["x"].astype(np.float32), "y": slots["y"].astype(np.float32),
                    "s": slots["s"].astype(np.float32), "team": slots["team"]}
@@ -285,7 +300,7 @@ def team_style(table, opening_frames=15000):
 # The cache invalidates itself: meta records a hash of the code that produced it, the build args and
 # the input files. load() rebuilds when any of them differ, so nobody silently reads an old table.
 
-CODE_FILES = ("src/features/frame_table.py", "src/data/atd.py", "games.py",
+CODE_FILES = ("src/features/frame_table.py", "src/data/atd.py", "src/tracking.py", "games.py",
               "starter/load_smart_tagging.py", "starter/baseline.py")
 
 

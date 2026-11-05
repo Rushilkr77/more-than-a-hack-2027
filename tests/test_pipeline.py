@@ -109,6 +109,8 @@ def test_dropped_track_stats(table):
     assert table.loc[0, "n_home"] == 1 and table.loc[1, "n_home"] == 2 and table.loc[0, "n_away"] == 2
     assert table.loc[0, "home_cx_m"] == pytest.approx(.4 * LENGTH, rel=1e-5)
     assert table.loc[1, "home_depth_m"] == pytest.approx(.1 * LENGTH, rel=1e-5)   # std of {.2,.4}
+    assert table["home_defensive_line_position_m"].isna().all()
+    assert (table["home_shape_quality"] == 0).all()  # synthetic bundle has fewer than seven tracks per team
 
 
 def test_period_graded_pre_kickoff(table):

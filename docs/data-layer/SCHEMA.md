@@ -1,4 +1,4 @@
-# Frame table schema (v0)
+# Frame table schema (v1)
 
 GENERATED from `SCHEMA` in `src/features/frame_table.py` by `scripts/render_schema_doc.py`. Do not edit by hand; a test fails if this drifts.
 
@@ -6,7 +6,7 @@ One row per tactical-video frame (199,319 rows), `frame` 0-based, row i == frame
 
 Conventions
 - Raw position columns (`*_cx_m`, `ball_x_m`, ...) are metres on a 105.3 x 68.0 m pitch in the ATD's own orientation (NOT flipped per half).
-- Shape and ball-territory columns (`*_dline_m`, `*_cen_m`, `*_fwd_m`, `*_line_gap_m`, `ball_home_adv_m`) are "metres from that team's own goal line": bigger = more advanced, same meaning in both halves, via `home_attacks_right`.
+- Shape and ball-territory columns (`*_dline_m`, `*_cen_m`, `*_fwd_m`, `*_line_gap_m`, `*_defensive_line_position_m`, `*_midfield_line_position_m`, `*_forward_line_position_m`, `ball_home_adv_m`) are "metres from that team's own goal line": bigger = more advanced, same meaning in both halves, via `home_attacks_right`.
 - Missing is NaN for floats; counts are 0; booleans are never null. A missing ball is `ball_visible == False`, never "dead ball".
 - Reliability columns: `home_shape_conf`, `away_shape_conf` (0..1), `ball_margin_m` (bigger = more trustworthy `nearest_team`). Hints (`tag_poss_hint`) are noisy weak labels.
 
@@ -57,3 +57,17 @@ Conventions
 | `home_shape_conf` | float32 | reliability 0..1 of the home shape columns: clip((on-pitch tracks - 5) / 5, 0, 1); 0 if fewer than 7 tracks (columns NaN) |
 | `away_shape_conf` | float32 | reliability 0..1 of the away shape columns (same rule) |
 | `tag_poss_hint` | int8 | weak possession hint from Smart Tagging phases: +1 home, -1 away, 0 none or conflicting (automatic tags, noisy) |
+| `home_defensive_line_position_m` | float32 | home: defensive line position, metres from own goal; mean of the 2nd-5th deepest visible tracks |
+| `home_midfield_line_position_m` | float32 | home: midfield line position, metres from own goal; median visible outfield position after excluding the deepest track |
+| `home_forward_line_position_m` | float32 | home: forward line position, metres from own goal; mean of three most advanced tracks after excluding the highest |
+| `home_team_width_m` | float32 | home: lateral 10th-to-90th percentile width of visible tracks, metres |
+| `home_shape_quality` | float32 | home: observation quality 0..1; 0 below seven visible tracks, then clip((tracks - 5) / 5, 0, 1) |
+| `home_defensive_line_velocity_mps` | float32 | home: centred-window defensive line velocity in attacking direction; NaN at edges or when shape is insufficient |
+| `home_midfield_line_velocity_mps` | float32 | home: centred-window midfield line velocity in attacking direction; NaN at edges or when shape is insufficient |
+| `away_defensive_line_position_m` | float32 | away: defensive line position, metres from own goal; mean of the 2nd-5th deepest visible tracks |
+| `away_midfield_line_position_m` | float32 | away: midfield line position, metres from own goal; median visible outfield position after excluding the deepest track |
+| `away_forward_line_position_m` | float32 | away: forward line position, metres from own goal; mean of three most advanced tracks after excluding the highest |
+| `away_team_width_m` | float32 | away: lateral 10th-to-90th percentile width of visible tracks, metres |
+| `away_shape_quality` | float32 | away: observation quality 0..1; 0 below seven visible tracks, then clip((tracks - 5) / 5, 0, 1) |
+| `away_defensive_line_velocity_mps` | float32 | away: centred-window defensive line velocity in attacking direction; NaN at edges or when shape is insufficient |
+| `away_midfield_line_velocity_mps` | float32 | away: centred-window midfield line velocity in attacking direction; NaN at edges or when shape is insufficient |
