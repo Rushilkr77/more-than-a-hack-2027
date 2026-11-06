@@ -51,6 +51,10 @@ class TrackingFrames:
     participants_by_slot: tuple[Participant, ...] | None = None
     ball_x_m: np.ndarray | None = None
     ball_y_m: np.ndarray | None = None
+    ball_possession_team_index: np.ndarray | None = None
+    ball_is_in_play: np.ndarray | None = None
+    ball_status: np.ndarray | None = None
+    game_section: np.ndarray | None = None
     seconds_from_kickoff: np.ndarray | None = None
 
     def __post_init__(self):
@@ -70,6 +74,31 @@ class TrackingFrames:
             self.ball_y_m = np.asarray(self.ball_y_m, dtype=float)
         if self.ball_x_m.shape != (frames,) or self.ball_y_m.shape != (frames,):
             raise ValueError("ball_x_m and ball_y_m must have shape (frames,)")
+        if self.ball_possession_team_index is None:
+            self.ball_possession_team_index = np.full(frames, -1, dtype=np.int8)
+        else:
+            self.ball_possession_team_index = np.asarray(self.ball_possession_team_index, dtype=np.int8)
+        if (self.ball_possession_team_index.shape != (frames,) or
+                not np.isin(self.ball_possession_team_index, (-1, HOME, AWAY)).all()):
+            raise ValueError("ball_possession_team_index must have shape (frames,) and values -1, 0, or 1")
+        if self.ball_is_in_play is None:
+            self.ball_is_in_play = np.ones(frames, dtype=bool)
+        else:
+            self.ball_is_in_play = np.asarray(self.ball_is_in_play, dtype=bool)
+        if self.ball_is_in_play.shape != (frames,):
+            raise ValueError("ball_is_in_play must have shape (frames,)")
+        if self.ball_status is None:
+            self.ball_status = np.full(frames, "", dtype=object)
+        else:
+            self.ball_status = np.asarray(self.ball_status, dtype=object)
+        if self.ball_status.shape != (frames,):
+            raise ValueError("ball_status must have shape (frames,)")
+        if self.game_section is None:
+            self.game_section = np.full(frames, "", dtype=object)
+        else:
+            self.game_section = np.asarray(self.game_section, dtype=object)
+        if self.game_section.shape != (frames,):
+            raise ValueError("game_section must have shape (frames,)")
         if self.seconds_from_kickoff is None:
             self.seconds_from_kickoff = np.arange(frames, dtype=float) / self.frames_per_second
         else:
@@ -131,6 +160,8 @@ class SportecTrackingAdapter:
     position XML alone does not establish a direction convention safely.
     """
 
+    BALL_POSSESSION_TEAM = {"1": HOME, "2": AWAY}
+
     def __init__(self, positions_path, metadata_path, attacks_toward_increasing_x_by_section, frames_per_second=25.0):
         self.positions_path = Path(positions_path)
         self.metadata_path = Path(metadata_path)
@@ -152,6 +183,10 @@ class SportecTrackingAdapter:
         y = np.full_like(x, np.nan)
         ball_x = np.full(n_frames, np.nan)
         ball_y = np.full(n_frames, np.nan)
+        ball_possession = np.full(n_frames, -1, dtype=np.int8)
+        ball_is_in_play = np.ones(n_frames, dtype=bool)
+        ball_status = np.full(n_frames, "", dtype=object)
+        game_section = np.full(n_frames, "", dtype=object)
         seconds = np.full(n_frames, np.nan)
         directions = np.zeros((n_frames, 2), dtype=bool)
         observed_frame = np.zeros(n_frames, dtype=bool)
@@ -167,11 +202,16 @@ class SportecTrackingAdapter:
                     row = int(frame.get("N")) - first_frame
                     observed_frame[row] = True
                     directions[row] = self.directions[section]
+                    game_section[row] = section
                     if kickoff_time is not None and frame.get("T"):
                         seconds[row] = (self._timestamp(frame.get("T")) - kickoff_time).total_seconds()
                     if frame.get("X") is not None and frame.get("Y") is not None:
-                        ball_x[row] = float(frame.get("X"))
-                        ball_y[row] = float(frame.get("Y"))
+                        ball_x[row] = float(frame.get("X")) + length / 2
+                        ball_y[row] = float(frame.get("Y")) + width / 2
+                    ball_possession[row] = self.BALL_POSSESSION_TEAM.get(frame.get("BallPossession"), -1)
+                    if frame.get("BallStatus") is not None:
+                        ball_status[row] = frame.get("BallStatus")
+                        ball_is_in_play[row] = ball_status[row] == "1"
                 continue
             if slot not in slot_index:
                 continue
@@ -179,11 +219,12 @@ class SportecTrackingAdapter:
                 row = int(frame.get("N")) - first_frame
                 observed_frame[row] = True
                 directions[row] = self.directions[section]
+                game_section[row] = section
                 if kickoff_time is not None and frame.get("T"):
                     seconds[row] = (self._timestamp(frame.get("T")) - kickoff_time).total_seconds()
                 if frame.get("X") is not None and frame.get("Y") is not None:
-                    x[row, slot_index[slot]] = float(frame.get("X"))
-                    y[row, slot_index[slot]] = float(frame.get("Y"))
+                    x[row, slot_index[slot]] = float(frame.get("X")) + length / 2
+                    y[row, slot_index[slot]] = float(frame.get("Y")) + width / 2
 
         # A dropped observation inherits the immediately preceding section direction.
         for row in range(1, n_frames):
@@ -205,6 +246,10 @@ class SportecTrackingAdapter:
             participants_by_slot=participants,
             ball_x_m=ball_x,
             ball_y_m=ball_y,
+            ball_possession_team_index=ball_possession,
+            ball_is_in_play=ball_is_in_play,
+            ball_status=ball_status,
+            game_section=game_section,
             seconds_from_kickoff=seconds,
         )
 

@@ -52,12 +52,14 @@ def _nearest_ball_team(tracking):
 
 def _team_ball_advance(tracking, team):
     attacks_right = tracking.team_attacks_toward_increasing_x[:, team]
-    if team == AWAY:
-        attacks_right = ~tracking.team_attacks_toward_increasing_x[:, HOME]
     return np.where(attacks_right, tracking.ball_x_m, tracking.pitch_length_m - tracking.ball_x_m)
 
 
 def _half_label(tracking, frame):
+    if tracking.game_section[frame] == "firstHalf":
+        return "1st Half"
+    if tracking.game_section[frame] == "secondHalf":
+        return "2nd Half"
     observed = np.flatnonzero(np.isfinite(tracking.seconds_from_kickoff))
     if not len(observed):
         return "1st Half"
@@ -91,7 +93,9 @@ def infer_team_phase_records(tracking, team_names):
     if len(team_names) != 2:
         raise ValueError("team_names must contain home and away names")
     minimum_frames = int(round(MINIMUM_PHASE_SECONDS * tracking.frames_per_second))
-    possession = _nearest_ball_team(tracking)
+    nearest_team = _nearest_ball_team(tracking)
+    possession = np.where(tracking.ball_possession_team_index >= 0,
+                          tracking.ball_possession_team_index, nearest_team)
     features = TrackingFeatureEngine(tracking).build_features()
     records = []
     for team, prefix in ((HOME, "home"), (AWAY, "away")):
@@ -99,18 +103,14 @@ def infer_team_phase_records(tracking, team_names):
         quality = features["{}_shape_quality".format(prefix)]
         own_ball = possession == team
         candidates = {
-            "BUILD UP": own_ball & (advance < tracking.pitch_length_m / 3),
-            "PROGRESSION": own_ball & (advance >= tracking.pitch_length_m / 3) & (advance < tracking.pitch_length_m * 2 / 3),
-            "CREATING CHANCES": own_ball & (advance >= tracking.pitch_length_m * 2 / 3),
-            "DEFENDING IN DEFENSIVE THIRD": (possession == 1 - team) & (advance < tracking.pitch_length_m / 3),
+            "BUILD UP": own_ball & tracking.ball_is_in_play & (advance < tracking.pitch_length_m / 3),
+            "PROGRESSION": own_ball & tracking.ball_is_in_play & (advance >= tracking.pitch_length_m / 3) & (advance < tracking.pitch_length_m * 2 / 3),
+            "CREATING CHANCES": own_ball & tracking.ball_is_in_play & (advance >= tracking.pitch_length_m * 2 / 3),
+            "DEFENDING IN DEFENSIVE THIRD": (possession == 1 - team) & tracking.ball_is_in_play & (advance < tracking.pitch_length_m / 3),
             "DEFENDING IN MIDDLE THIRD": ((possession == 1 - team) & (advance >= tracking.pitch_length_m / 3) &
-                                           (advance < tracking.pitch_length_m * 2 / 3)),
-            "DEFENDING IN ATTACKING THIRD": (possession == 1 - team) & (advance >= tracking.pitch_length_m * 2 / 3),
+                                           (advance < tracking.pitch_length_m * 2 / 3) & tracking.ball_is_in_play),
+            "DEFENDING IN ATTACKING THIRD": (possession == 1 - team) & tracking.ball_is_in_play & (advance >= tracking.pitch_length_m * 2 / 3),
         }
-        forward_step = np.full(len(advance), np.nan)
-        step = int(round(tracking.frames_per_second))
-        forward_step[step:] = advance[step:] - advance[:-step]
-        candidates["LONG BALL"] = own_ball & (forward_step >= tracking.pitch_length_m * 0.2)
         for code, mask in candidates.items():
             for start, end in _contiguous_runs(mask, minimum_frames):
                 records.append(_record(tracking, code, team, team_names, start, end, np.nanmedian(quality[start:end])))

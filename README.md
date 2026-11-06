@@ -130,7 +130,7 @@ For a match with its events, metadata, and full `positions.xml` already download
   outputs/idsse/J03WMX_inferred_smart_tagging.xml --fail-on-error
 ```
 
-The first-pass phase labels are deliberately weak training labels; transitions, long balls, and box codes are not emitted until their required sublabels can be derived and validated. See [the evidence chain](docs/data-layer/SMART_TAGGING_EVIDENCE.md) for the XML contract, confidence policy, and current limits.
+The first-pass phase labels are deliberately weak training labels. Sportec's supplied possession and ball-status fields are used when present; the nearest-player estimate is only a fallback for providers that lack them. Transitions, long balls, and box codes are not emitted until their required sublabels can be derived and validated. See [the evidence chain](docs/data-layer/SMART_TAGGING_EVIDENCE.md) for the XML contract, confidence policy, and current limits.
 
 ---
 

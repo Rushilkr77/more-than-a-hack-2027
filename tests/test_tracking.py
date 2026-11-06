@@ -57,17 +57,21 @@ def test_provider_adapters_emit_the_same_canonical_conventions(tmp_path):
     </MatchInformation></PutDataRequest>""")
     positions = tmp_path / "positions.xml"
     positions.write_text("""<PutDataRequest><Positions>
-    <FrameSet GameSection=\"firstHalf\" TeamId=\"H\" PersonId=\"home-player\"><Frame N=\"10\" T=\"2022-01-01T12:00:01+00:00\" X=\"10\" Y=\"20\" /></FrameSet>
-    <FrameSet GameSection=\"firstHalf\" TeamId=\"A\" PersonId=\"away-player\"><Frame N=\"10\" T=\"2022-01-01T12:00:01+00:00\" X=\"95\" Y=\"30\" /></FrameSet>
-    <FrameSet GameSection=\"firstHalf\" TeamId=\"BALL\" PersonId=\"ball\"><Frame N=\"10\" T=\"2022-01-01T12:00:01+00:00\" X=\"50\" Y=\"34\" /></FrameSet>
+    <FrameSet GameSection=\"firstHalf\" TeamId=\"H\" PersonId=\"home-player\"><Frame N=\"10\" T=\"2022-01-01T12:00:01+00:00\" X=\"-42.5\" Y=\"-14\" /><Frame N=\"11\" T=\"2022-01-01T12:00:01.04+00:00\" X=\"-42.5\" Y=\"-14\" /></FrameSet>
+    <FrameSet GameSection=\"firstHalf\" TeamId=\"A\" PersonId=\"away-player\"><Frame N=\"10\" T=\"2022-01-01T12:00:01+00:00\" X=\"42.5\" Y=\"-4\" /><Frame N=\"11\" T=\"2022-01-01T12:00:01.04+00:00\" X=\"42.5\" Y=\"-4\" /></FrameSet>
+    <FrameSet GameSection=\"firstHalf\" TeamId=\"BALL\" PersonId=\"ball\"><Frame N=\"10\" T=\"2022-01-01T12:00:01+00:00\" X=\"0\" Y=\"0\" BallPossession=\"1\" BallStatus=\"1\" /><Frame N=\"11\" T=\"2022-01-01T12:00:01.04+00:00\" X=\"0\" Y=\"0\" BallPossession=\"2\" BallStatus=\"0\" /></FrameSet>
     </Positions></PutDataRequest>""")
     sportec = SportecTrackingAdapter(positions, metadata, {"firstHalf": (True, False)}).load()
-    assert sportec.player_x_m.tolist() == [[10.0, 95.0]]
+    assert sportec.player_x_m.tolist() == [[10.0, 95.0], [10.0, 95.0]]
     assert sportec.team_index_by_slot.tolist() == [0, 1]
-    assert sportec.team_attacks_toward_increasing_x.tolist() == [[True, False]]
-    assert sportec.ball_x_m.tolist() == [50.0]
-    assert sportec.ball_y_m.tolist() == [34.0]
-    assert sportec.seconds_from_kickoff.tolist() == [1.0]
+    assert sportec.team_attacks_toward_increasing_x.tolist() == [[True, False], [True, False]]
+    assert sportec.ball_x_m.tolist() == [52.5, 52.5]
+    assert sportec.ball_y_m.tolist() == [34.0, 34.0]
+    assert sportec.ball_possession_team_index.tolist() == [0, 1]
+    assert sportec.ball_is_in_play.tolist() == [True, False]
+    assert sportec.ball_status.tolist() == ["1", "0"]
+    assert sportec.game_section.tolist() == ["firstHalf", "firstHalf"]
+    assert sportec.seconds_from_kickoff.tolist() == [1.0, 1.04]
     assert sportec.participants_by_slot[0].source_person_id == "home-player"
     assert sportec.participants_by_slot[0].shirt_number == "9"
     assert sportec.participants_by_slot[0].playing_position == "FW"

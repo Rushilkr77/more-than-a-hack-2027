@@ -38,6 +38,29 @@ def test_low_advancing_possession_emits_a_lower_confidence_build_up_interval():
     assert 0 < float(build_up[0].labels["Confidence"]) < 1
 
 
+def test_provider_possession_overrides_nearest_player_proxy():
+    frames = 150
+    player_x = np.empty((frames, 14))
+    player_y = np.tile([8, 16, 24, 32, 40, 48, 56] * 2, (frames, 1))
+    player_x[:, :7] = [40, 45, 50, 55, 60, 65, 70]
+    player_x[:, 7:] = [5, 10, 15, 20, 25, 30, 35]
+    tracking = TrackingFrames(
+        player_x_m=player_x, player_y_m=player_y, team_index_by_slot=np.array([0] * 7 + [1] * 7),
+        team_attacks_toward_increasing_x=np.array([[True, False]] * frames),
+        pitch_length_m=105, pitch_width_m=68, frames_per_second=25,
+        ball_x_m=np.full(frames, 10.0), ball_y_m=np.full(frames, 34.0),
+        ball_possession_team_index=np.zeros(frames, dtype=np.int8), ball_is_in_play=np.ones(frames, dtype=bool),
+        game_section=np.full(frames, "secondHalf", dtype=object),
+    )
+
+    records = infer_team_phase_records(tracking, ("Home FC", "Away FC"))
+
+    assert {(record.code, record.labels["Team"], record.labels["Half"]) for record in records} == {
+        ("BUILD UP", "Home FC", "2nd Half"),
+        ("DEFENDING IN ATTACKING THIRD", "Away FC", "2nd Half"),
+    }
+
+
 def test_nearest_player_flicker_does_not_create_transition_labels():
     frames = 150
     player_x = np.empty((frames, 14))

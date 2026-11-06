@@ -79,11 +79,11 @@ One point cannot say whether a team has a high defensive line, a low block with 
 
 ### Sportec / IDSSE
 
-`SportecTrackingAdapter` reads the position XML and its metadata pitch/team fields. Sportec player coordinates are already metres. The caller must supply `attacks_toward_increasing_x_by_section`, for example a mapping keyed by `firstHalf` and `secondHalf` whose values are `(home_direction, away_direction)` booleans.
+`SportecTrackingAdapter` reads the position XML and its metadata pitch/team fields. Sportec positions are metres around the pitch centre, so the adapter shifts them into the shared `0..pitch_length` and `0..pitch_width` convention. The caller must supply `attacks_toward_increasing_x_by_section`, for example a mapping keyed by `firstHalf` and `secondHalf` whose values are `(home_direction, away_direction)` booleans.
 
 This is intentional: the raw Sportec position XML identifies the game section but has not yet been independently validated as a reliable attack-direction declaration. The adapter refuses to load a section without an explicit direction instead of guessing and producing mirrored tactical features. A small synthetic regression test verifies that both adapters produce the same canonical convention.
 
-The Sportec adapter now retains ball coordinates and elapsed time alongside the player series. The phase generator uses ball visibility, the nearest-player team as a deliberately weak possession proxy, and attack-relative ball territory. Ball-derived inference is kept separate from the team-shape engine so that its assumptions stay visible and independently replaceable.
+The Sportec adapter retains ball coordinates, elapsed time, raw ball status, game section, and the provider's continuous ball-possession code alongside the player series. Possession code `1` maps to home and `2` to away; this was checked against the opening kick-off of all seven supplied matches. The phase generator uses that provider truth when present and only falls back to the nearest-player team for providers such as Hackathon ATD that lack it. Ball-derived inference is kept separate from the team-shape engine so that its assumptions stay visible and independently replaceable.
 
 ## How this becomes Smart Tagging XML
 
@@ -102,7 +102,7 @@ The current workflow is:
 
 ## First-pass limits
 
-- `BUILD UP`, `PROGRESSION`, `CREATING CHANCES`, and the three defensive-third codes are weak labels, not validated ground truth. They require five uninterrupted seconds with a visible ball and a stable nearest-player team.
+- `BUILD UP`, `PROGRESSION`, `CREATING CHANCES`, and the three defensive-third codes are weak labels, not validated ground truth. They require five uninterrupted seconds with a visible in-play ball and provider possession where available; only missing provider possession falls back to the nearest-player team.
 - No `ATTACKING TRANSITION` or `DEFENSIVE TRANSITION` labels are emitted. A raw nearest-player-team switch flickers at player-contact level and is not possession turnover evidence.
 - No production `LONG BALL` rule is emitted. It needs a ball-flight/pass segmentation rule rather than a simple forward-distance threshold.
 - `BALL IN FINAL THIRD`, `BALL IN THE BOX`, and `PLAYERS IN THE BOX` remain absent because Smart Tagging requires their `Side`, `Direction of ball entry`, and/or `Max Players in the box` labels. Those fields must be derived and validated together; emitting only their parent code would violate the reference schema.
