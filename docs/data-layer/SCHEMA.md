@@ -8,7 +8,7 @@ Conventions
 - Raw position columns (`*_cx_m`, `ball_x_m`, ...) are metres on a 105.3 x 68.0 m pitch in the ATD's own orientation (NOT flipped per half).
 - Shape and ball-territory columns (`*_dline_m`, `*_cen_m`, `*_fwd_m`, `*_line_gap_m`, `ball_home_adv_m`) are "metres from that team's own goal line": bigger = more advanced, same meaning in both halves, via `home_attacks_right`.
 - Missing is NaN for floats; counts are 0; booleans are never null. A missing ball is `ball_visible == False`, never "dead ball".
-- Reliability columns: `home_shape_conf`, `away_shape_conf` (0..1), `ball_margin_m` (bigger = more trustworthy `nearest_team`). Hints (`tag_poss_hint`) are noisy weak labels.
+- Reliability columns: `home_shape_conf`, `away_shape_conf`, `dead_ball_conf`, `dead_player_conf` (0..1), `ball_margin_m` (bigger = more trustworthy `nearest_team`). Hints (`tag_poss_hint`) are noisy weak labels.
 
 | column | dtype | meaning |
 |---|---|---|
@@ -57,3 +57,20 @@ Conventions
 | `home_shape_conf` | float32 | reliability 0..1 of the home shape columns: clip((on-pitch tracks - 5) / 5, 0, 1); 0 if fewer than 7 tracks (columns NaN) |
 | `away_shape_conf` | float32 | reliability 0..1 of the away shape columns (same rule) |
 | `tag_poss_hint` | int8 | weak possession hint from Smart Tagging phases: +1 home, -1 away, 0 none or conflicting (automatic tags, noisy) |
+| `ball_n_obs_1s` | int8 | visible ball frames in +-12 frames (+-0.5 s) |
+| `ball_range_back_1s_m` | float32 | bbox diagonal of the visible ball over this and the previous 24 frames, metres; NaN if < 8 observations (small = ball went still) |
+| `ball_range_fwd_1s_m` | float32 | bbox diagonal of the visible ball over this and the next 24 frames, metres; NaN if < 8 observations (large after small = restart kick) |
+| `ball_speed_p90_ms` | float32 | 90th percentile of ball speed from consecutive visible positions in +-12 frames, steps > 40 m/s dropped as tracker jumps; NaN if < 2 steps (not ball_speed_atd_ms) |
+| `ball_dist_touchline_m` | float32 | signed distance of the +-12-frame mean ball to the nearest touchline: + outside, - inside; NaN if no ball (throw-in) |
+| `ball_dist_goalline_m` | float32 | signed distance of the +-12-frame mean ball to the nearest goal line: + outside, - inside; NaN if no ball (corner, goal kick) |
+| `ball_dist_corner_m` | float32 | distance of the +-12-frame mean ball to the nearest corner flag; NaN if no ball (corner) |
+| `ball_dist_goal_m` | float32 | distance of the +-12-frame mean ball to the nearest goal centre; NaN if no ball (goal kick, penalty) |
+| `ball_dist_centre_m` | float32 | distance of the +-12-frame mean ball to the centre spot; NaN if no ball (kick-off) |
+| `pl_slow_share` | float32 | share of on-pitch track speeds < 1 m/s over +-25 frames, deepest track per team dropped (keeper proxy); NaN if none (stoppage) |
+| `pl_fast_share` | float32 | share of the same speeds > 3 m/s; NaN if none (low = nobody running) |
+| `pl_in_box_max_n` | int8 | visible tracks inside a penalty area (16.5 x 40.32 m), the larger of the two; ball-free (corner / free-kick crowding; tracklet duplicates inflate it) |
+| `pl_still_at_line_n` | int8 | visible tracks within 1.5 m of a touchline moving < 1 m/s; ball-free (throw-in taker) |
+| `home_own_half_share` | float32 | share of on-pitch home tracks in the home half (direction via home_attacks_right); NaN if none (kick-off set-up) |
+| `away_own_half_share` | float32 | share of on-pitch away tracks in the away half; NaN if none |
+| `dead_ball_conf` | float32 | reliability 0..1 of the ball dead-ball columns: clip(ball_n_obs_1s / 25, 0, 1) * (1 - share of steps dropped as jumps); 0 = columns NaN |
+| `dead_player_conf` | float32 | reliability 0..1 of pl_slow_share / pl_fast_share: clip(valid speeds in +-25 frames / 300, 0, 1); 0 = columns NaN |

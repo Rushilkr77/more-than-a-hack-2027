@@ -93,6 +93,26 @@ SCHEMA = [
     ("home_shape_conf", "float32", "reliability 0..1 of the home shape columns: clip((on-pitch tracks - 5) / 5, 0, 1); 0 if fewer than 7 tracks (columns NaN)"),
     ("away_shape_conf", "float32", "reliability 0..1 of the away shape columns (same rule)"),
     ("tag_poss_hint", "int8", "weak possession hint from Smart Tagging phases: +1 home, -1 away, 0 none or conflicting (automatic tags, noisy)"),
+    # --- dead-ball signals (appended): model inputs, not labels. Built by dead_ball_columns() from tracking only; every
+    # constant is rule-book pitch geometry or a physical unit, nothing is fitted on this match. Windows never cross a
+    # `period` change. Ball positions > 10 m outside the pitch count as unobserved here (ball_visible is unchanged).
+    ("ball_n_obs_1s", "int8", "visible ball frames in +-12 frames (+-0.5 s)"),
+    ("ball_range_back_1s_m", "float32", "bbox diagonal of the visible ball over this and the previous 24 frames, metres; NaN if < 8 observations (small = ball went still)"),
+    ("ball_range_fwd_1s_m", "float32", "bbox diagonal of the visible ball over this and the next 24 frames, metres; NaN if < 8 observations (large after small = restart kick)"),
+    ("ball_speed_p90_ms", "float32", "90th percentile of ball speed from consecutive visible positions in +-12 frames, steps > 40 m/s dropped as tracker jumps; NaN if < 2 steps (not ball_speed_atd_ms)"),
+    ("ball_dist_touchline_m", "float32", "signed distance of the +-12-frame mean ball to the nearest touchline: + outside, - inside; NaN if no ball (throw-in)"),
+    ("ball_dist_goalline_m", "float32", "signed distance of the +-12-frame mean ball to the nearest goal line: + outside, - inside; NaN if no ball (corner, goal kick)"),
+    ("ball_dist_corner_m", "float32", "distance of the +-12-frame mean ball to the nearest corner flag; NaN if no ball (corner)"),
+    ("ball_dist_goal_m", "float32", "distance of the +-12-frame mean ball to the nearest goal centre; NaN if no ball (goal kick, penalty)"),
+    ("ball_dist_centre_m", "float32", "distance of the +-12-frame mean ball to the centre spot; NaN if no ball (kick-off)"),
+    ("pl_slow_share", "float32", "share of on-pitch track speeds < 1 m/s over +-25 frames, deepest track per team dropped (keeper proxy); NaN if none (stoppage)"),
+    ("pl_fast_share", "float32", "share of the same speeds > 3 m/s; NaN if none (low = nobody running)"),
+    ("pl_in_box_max_n", "int8", "visible tracks inside a penalty area (16.5 x 40.32 m), the larger of the two; ball-free (corner / free-kick crowding; tracklet duplicates inflate it)"),
+    ("pl_still_at_line_n", "int8", "visible tracks within 1.5 m of a touchline moving < 1 m/s; ball-free (throw-in taker)"),
+    ("home_own_half_share", "float32", "share of on-pitch home tracks in the home half (direction via home_attacks_right); NaN if none (kick-off set-up)"),
+    ("away_own_half_share", "float32", "share of on-pitch away tracks in the away half; NaN if none"),
+    ("dead_ball_conf", "float32", "reliability 0..1 of the ball dead-ball columns: clip(ball_n_obs_1s / 25, 0, 1) * (1 - share of steps dropped as jumps); 0 = columns NaN"),
+    ("dead_player_conf", "float32", "reliability 0..1 of pl_slow_share / pl_fast_share: clip(valid speeds in +-25 frames / 300, 0, 1); 0 = columns NaN"),
 ]
 COLUMNS = [name for name, _, _ in SCHEMA]
 
@@ -150,6 +170,91 @@ def shape_columns(x, y, attacks_right, length, width):
     out["line_gap_m"] = out["fwd_m"] - out["dline_m"]
     conf = np.where(ok, np.clip((n - 5) / 5.0, 0, 1), 0.0)
     return out, conf
+
+
+# Dead-ball constants: rule-book pitch geometry (Laws of the Game) and physical units, never fitted to a match.
+BOX_DEPTH_M, BOX_WIDTH_M = 16.5, 40.32     # penalty area
+LINE_NEAR_M = 1.5                          # "standing on the touchline" (throw-in taker)
+SLOW_MS, FAST_MS = 1.0, 3.0                # standing/walking vs running
+BALL_JUMP_MS = 40.0                        # faster than any kick: a tracker jump, not ball movement
+BALL_JUNK_OUT_M = 10.0                     # further outside the pitch than any restart spot: junk position
+MIN_BALL_OBS = 8                           # of 25 frames before a ball range is reported
+PLAYER_CONF_N = 300                        # ~6 tracks x 51 frames of speeds for full player confidence
+
+
+def _rolling(v, before, after, runs, fn, fill=np.nan):
+    """fn over the window [f - before, f + after] of v (frames first), clipped to each run in `runs`."""
+    out = np.empty(v.shape, dtype=np.float64)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)   # all-NaN windows are the NaN we want
+        for a, b in runs:
+            seg = np.pad(v[a:b].astype(np.float64), (before, after), constant_values=fill)
+            out[a:b] = fn(np.lib.stride_tricks.sliding_window_view(seg, before + after + 1), axis=1)
+    return out
+
+
+def dead_ball_columns(x, y, s, team, ball_x, ball_y, period, home_attacks_right, length, width, fps=25):
+    """Dead-ball input columns from tracking only (see SCHEMA). Pure function of arrays, so it runs unchanged on any
+    match converted to this layout: x, y, s [frames, slots] in metres / m/s with the origin at a pitch corner; team
+    [slots] HOME/AWAY; ball_x, ball_y [frames] metres; NaN = unobserved. Returns {column: array}."""
+    edges = np.flatnonzero(np.diff(period)) + 1
+    runs = list(zip(np.r_[0, edges], np.r_[edges, len(period)]))
+    half, win = fps // 2, fps - 1
+    cols = {}
+
+    # ball: junk positions out, then counts, ranges, speeds and the restart-spot geometry
+    out_m = np.fmax(np.fmax(-ball_x, ball_x - length), np.fmax(-ball_y, ball_y - width))
+    keep = np.isfinite(ball_x) & np.isfinite(ball_y) & ~(out_m > BALL_JUNK_OUT_M)
+    bx, by = np.where(keep, ball_x, np.nan), np.where(keep, ball_y, np.nan)
+    cols["ball_n_obs_1s"] = _rolling(keep, half, half, runs, np.sum, 0)
+    for name, (lo, hi) in (("back", (win, 0)), ("fwd", (0, win))):
+        n = _rolling(keep, lo, hi, runs, np.sum, 0)
+        span = [_rolling(v, lo, hi, runs, np.nanmax) - _rolling(v, lo, hi, runs, np.nanmin) for v in (bx, by)]
+        cols["ball_range_{}_1s_m".format(name)] = np.where(n >= MIN_BALL_OBS, np.hypot(*span), np.nan)
+    step = np.r_[np.nan, np.hypot(np.diff(bx), np.diff(by)) * fps]
+    step[edges] = np.nan                                            # no step across a period change
+    pair = np.isfinite(step)
+    jump = pair & (step > BALL_JUMP_MS)
+    speed = np.where(pair & ~jump, step, np.nan)
+    n_speed = _rolling(np.isfinite(speed), half, half, runs, np.sum, 0)
+    p90 = _rolling(speed, half, half, runs, lambda w, axis: np.nanpercentile(w, 90, axis=axis))
+    cols["ball_speed_p90_ms"] = np.where(n_speed >= 2, p90, np.nan)
+    n_pair = _rolling(pair, half, half, runs, np.sum, 0)
+    jump_share = np.where(n_pair > 0, _rolling(jump, half, half, runs, np.sum, 0) / np.maximum(n_pair, 1), 0.0)
+    cols["dead_ball_conf"] = np.clip(cols["ball_n_obs_1s"] / fps, 0, 1) * (1 - jump_share)
+    mx, my = (_rolling(v, half, half, runs, np.nanmean) for v in (bx, by))
+    cols["ball_dist_touchline_m"] = np.maximum(-my, my - width)    # one expression: + outside, - inside
+    cols["ball_dist_goalline_m"] = np.maximum(-mx, mx - length)
+    cols["ball_dist_corner_m"] = np.hypot(np.minimum(mx, length - mx), np.minimum(my, width - my))
+    cols["ball_dist_goal_m"] = np.hypot(np.minimum(mx, length - mx), my - width / 2)
+    cols["ball_dist_centre_m"] = np.hypot(mx - length / 2, my - width / 2)
+
+    # players: on-pitch tracks, deepest per team dropped (keeper proxy; slots carry no reliable role)
+    seen = np.isfinite(x) & np.isfinite(y)
+    on = seen & (x >= -1) & (x <= length + 1) & (y >= -1) & (y <= width + 1)
+    use = on & np.isfinite(s)
+    rows = np.arange(len(x))
+    for k in (HOME, AWAY):
+        m = team == k
+        right = home_attacks_right if k == HOME else ~home_attacks_right
+        own = np.where(on[:, m], np.where(right[:, None], x[:, m], length - x[:, m]), np.inf)
+        has = np.isfinite(own).any(axis=1)
+        idx = np.flatnonzero(m)[np.argmin(own, axis=1)]
+        use[rows[has], idx[has]] = False
+        n_team = on[:, m].sum(axis=1)
+        cols[("home" if k == HOME else "away") + "_own_half_share"] = np.where(
+            n_team > 0, (own < length / 2).sum(axis=1) / np.maximum(n_team, 1), np.nan)
+    n_valid = _rolling(use.sum(axis=1), fps, fps, runs, np.sum, 0)
+    for name, hit in (("slow", use & (s < SLOW_MS)), ("fast", use & (s > FAST_MS))):
+        cnt = _rolling(hit.sum(axis=1), fps, fps, runs, np.sum, 0)
+        cols["pl_{}_share".format(name)] = np.where(n_valid > 0, cnt / np.maximum(n_valid, 1), np.nan)
+    cols["dead_player_conf"] = np.clip(n_valid / PLAYER_CONF_N, 0, 1)
+    in_y = np.abs(y - width / 2) <= BOX_WIDTH_M / 2
+    cols["pl_in_box_max_n"] = np.maximum((seen & in_y & (x >= 0) & (x <= BOX_DEPTH_M)).sum(axis=1),
+                                         (seen & in_y & (x <= length) & (x >= length - BOX_DEPTH_M)).sum(axis=1))
+    at_line = np.minimum(np.abs(y), np.abs(y - width)) <= LINE_NEAR_M
+    cols["pl_still_at_line_n"] = (seen & at_line & (s < SLOW_MS)).sum(axis=1)
+    return cols
 
 
 def _tag_columns(events, n_frames):
@@ -237,8 +342,10 @@ def build_table(data_dir=None, n_frames=None, blocks=None, kickoffs=None):
         for c, v in shape.items():
             cols["{}_{}".format(name, c)] = v
         cols[name + "_shape_conf"] = conf
+    cols.update(dead_ball_columns(slots["x"], slots["y"], slots["s"], slots["team"], slots["ball_x"], slots["ball_y"],
+                                  cols["period"], right, length, width, GAMES[GAME]["fps"]))
 
-    table = pd.DataFrame({name: np.asarray(cols[name]).astype(dtype) for name, dtype, _ in SCHEMA})
+    table =pd.DataFrame({name: np.asarray(cols[name]).astype(dtype) for name, dtype, _ in SCHEMA})
     slot_arrays = {"x": slots["x"].astype(np.float32), "y": slots["y"].astype(np.float32),
                    "s": slots["s"].astype(np.float32), "team": slots["team"]}
     return table, slot_arrays

@@ -428,3 +428,50 @@ def test_manifest_and_slice_report(table, tmp_path):
 def test_schema_doc_in_sync():
     from scripts.render_schema_doc import DOC, render
     assert open(DOC).read() == render()
+
+
+def test_dead_ball_columns_cases():
+    F, L, W = 100, 105.0, 68.0
+    period = np.where(np.arange(F) < 60, 1, 2)
+    bx, by = np.full(F, 50.0), np.full(F, 34.0)        # still ball at frames 0..39
+    bx[40:60] = by[40:60] = np.nan                       # ball lost for longer than any window
+    bx[60:] = 50.0 + 0.4 * np.arange(40)                 # 10 m/s from the period change on
+    bx[90] += 20.0                                       # one tracker jump (two > 40 m/s steps)
+    team = np.array([ft.HOME, ft.HOME, ft.AWAY, ft.AWAY])
+    x = np.tile([10.0, 30.0, 70.0, 90.0], (F, 1))        # home in its own (left) half, away in its own (right) half
+    y = np.tile([34.0, 0.5, 34.0, 34.0], (F, 1))         # home slot 1 stands on the touchline
+    s = np.tile([0.5, 0.5, 5.0, 5.0], (F, 1))
+    c = ft.dead_ball_columns(x, y, s, team, bx, by, period, np.ones(F, bool), L, W)
+
+    assert c["ball_n_obs_1s"][20] == 25 and c["dead_ball_conf"][20] == 1
+    assert c["ball_range_back_1s_m"][20] == 0 and c["ball_speed_p90_ms"][20] == 0
+    assert c["ball_dist_touchline_m"][20] == -34 and c["ball_dist_goalline_m"][20] == -50
+    assert c["ball_dist_centre_m"][20] == pytest.approx(2.5)
+    # missing ball is no evidence: NaN, never "still"
+    assert c["ball_n_obs_1s"][52] == 0 and c["dead_ball_conf"][52] == 0
+    assert all(np.isnan(c[k][52]) for k in ("ball_range_fwd_1s_m", "ball_speed_p90_ms", "ball_dist_touchline_m"))
+    # windows stop at the period change: frame 59 must not see the moving ball of period 2
+    assert np.isnan(c["ball_range_fwd_1s_m"][59]) and c["ball_n_obs_1s"][59] == 0
+    assert c["ball_speed_p90_ms"][75] == pytest.approx(10.0)
+    assert c["dead_ball_conf"][90] < 1 and c["ball_speed_p90_ms"][90] < 40
+    # players: deepest per team dropped -> one slow home, one fast away track left
+    assert c["pl_slow_share"][20] == pytest.approx(0.5) and c["pl_fast_share"][20] == pytest.approx(0.5)
+    assert c["pl_in_box_max_n"][20] == 1 and c["pl_still_at_line_n"][20] == 1
+    assert c["home_own_half_share"][20] == 1 and c["away_own_half_share"][20] == 1
+    assert c["dead_player_conf"][30] == pytest.approx(min(1, 2 * 51 / ft.PLAYER_CONF_N))
+
+
+def test_dead_ball_columns_in_table(table):
+    for k in ("pl_slow_share", "pl_fast_share", "dead_ball_conf", "dead_player_conf"):
+        v = table[k].dropna()
+        assert ((v >= 0) & (v <= 1)).all(), k
+    assert table.loc[110, "ball_n_obs_1s"] < 25                     # ball lost on rows 100..109
+
+
+@real
+def test_real_dead_ball_coverage(real_table):
+    g = real_table[real_table.graded]
+    assert g["pl_slow_share"].notna().mean() > 0.95
+    no_ball = g["ball_n_obs_1s"] == 0
+    assert g.loc[no_ball, "ball_speed_p90_ms"].isna().all() and (g.loc[no_ball, "dead_ball_conf"] == 0).all()
+    print("dead-ball NaN share (graded):", g.filter(regex="^(ball_range|ball_speed_p90|ball_dist|pl_)").isna().mean().round(3).to_dict())
