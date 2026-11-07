@@ -4,7 +4,7 @@
 - No hand labels or corrections on the provided match, for any purpose. No private ground truth.
 - The public five minutes (frames 11185..18684, 17 possessions) are for checking alignment and file format only. Not training data, not a tuning set: they rank the smoothing windows wrongly.
 - Labels from OTHER matches are fine in any amount if organisers can access them and the technical document explains source, method and amount. Split by whole matches, never random frames.
-- Algorithmic pseudo-labels on the provided match are fine (no person decides them).
+- Training, fitting, calibrating or tuning use external data only (organisers' email): nothing is learned from the provided match, not even from algorithmic pseudo-labels or unlabelled columns (scalers, imputers, thresholds). The provided match is inference only.
 
 ## Proxies available now (none is truth)
 | tool | what it tells you | caveat |
