@@ -8,6 +8,7 @@ teammates, and the Claude sessions they brief, can use it without re-deriving an
 | [PIPELINE.md](PIPELINE.md) | you need to run it, find a module, or know what is cached and why |
 | [SCHEMA.md](SCHEMA.md) | you need a column's meaning, unit or reliability (generated, always current) |
 | [DEAD_BALL.md](DEAD_BALL.md) | you use or extend the dead-ball input columns, or convert Sportec for them |
+| [SPORTEC.md](SPORTEC.md) | you train or validate on the 7 damaged Sportec matches (bundles, labels, split, leak checks) |
 | [FINDINGS.md](FINDINGS.md) | you want the measured facts about the data (numbers, how they were checked) |
 | [SMART_TAGGING_EVIDENCE.md](SMART_TAGGING_EVIDENCE.md) | you need the verified XML contract, audit outcome, or the rationale for mapping outside event data |
 | [../tracking/README.md](../tracking/README.md) | you need the provider-neutral tracking measurements that future inferred Smart Tags will use |
