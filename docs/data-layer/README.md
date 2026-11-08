@@ -10,6 +10,7 @@ teammates, and the Claude sessions they brief, can use it without re-deriving an
 | [DEAD_BALL.md](DEAD_BALL.md) | you use or extend the dead-ball input columns, or convert Sportec for them |
 | [SPORTEC.md](SPORTEC.md) | you train or validate on the 7 damaged Sportec matches (bundles, labels, split, leak checks) |
 | [FINDINGS.md](FINDINGS.md) | you want the measured facts about the data (numbers, how they were checked) |
+| [SMART_TAGGING_EVIDENCE.md](SMART_TAGGING_EVIDENCE.md) | you need the verified XML contract, audit outcome, or the rationale for mapping outside event data |
 | [RISKS.md](RISKS.md) | before relying on any column or fill; each risk has evidence and a mitigation |
 | [BROADCAST.md](BROADCAST.md) | you consider using the broadcast tracking (alignment, tiers, why fills are optional) |
 | [VALIDATION.md](VALIDATION.md) | you evaluate a model: what is allowed, what proxies exist, how to find what hurts spellF1 |

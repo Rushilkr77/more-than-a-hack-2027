@@ -12,8 +12,8 @@ Owns: loader, frame table, caches, manifests, build command. Watch: schema chang
 ## Final input layer (Priyam)
 Combine Kalhan's PR 2 schemas 01–03 with the dead-ball columns into one `make_inputs(table, pitch)` that runs
 unchanged on BAR-ATH and on the Sportec bundles. Follow the contract in [SPORTEC.md](SPORTEC.md) ("Contract for the
-final input methods"); schema 04 / Smart Tagging and Kalhan's PR 4 tags are out of model inputs.
-> Prompt: "Read docs/data-layer/SPORTEC.md and SCHEMA.md. Implement make_inputs(table, pitch) from ft.model_columns() plus PR 2 schema 01-03 fields. No dataset branches, no BAR-ATH constants, no label files. Windows stop at period changes and NaN stays NaN. Prove parity: same columns and dtypes on ft.load() and ft.bundle_table('data/sportec_bundles/J03WMX'), then run scripts/diagnostics_round1.py and report every FLAG."
+final input methods"). Schema 04's tag fields come from our generated `gtag_*` columns. Metrica's `tag_*` stay smoother-only.
+> Prompt: "Read docs/data-layer/SPORTEC.md and SCHEMA.md. Implement make_inputs(table, pitch) from ft.model_columns() plus PR 2 schema 01-03 fields; schema 04 tag fields map to the gtag_* columns, never Metrica's tag_*. No dataset branches, no BAR-ATH constants, no label files. Windows stop at period changes and NaN stays NaN. Prove parity: same columns and dtypes on ft.load() and ft.bundle_table('data/sportec_bundles/J03WMX'), then run scripts/diagnostics_round1.py and report every FLAG."
 
 ## Ball evidence (Priyam, pre-pivot)
 Read: `ball_visible`, `ball_x_m/ball_y_m`, `home_ball_dist_m/away_ball_dist_m`, `nearest_team`, `ball_margin_m` (confidence), `ball_home_adv_m`, optional fills via `ball_filled`. Cautions: nearest player is a defender-biased proxy (RISKS 1); margin <1 m is contested (17% of frames); ball speed from the ATD is unusable; jumps >40 m/s are tracker teleports; out-of-bounds ball is not D. Ball gaps are long, so do not interpolate.

@@ -18,7 +18,7 @@ python scripts/diagnostics_round1.py        # risk-register markers with a FLAG 
 ```python
 from src.features import frame_table as ft
 table, slots = ft.bundle_table("data/sportec_bundles/J03WMX")   # same 62 columns as ft.load() on BAR-ATH
-X = table[ft.model_columns()]                                   # model inputs: no tag_*, hom_*, graded, frame
+X = table[ft.model_columns()]                                   # model inputs: gtag_* in; Metrica tag_*, hom_*, graded, frame out
 ```
 ## Contract for the final input methods (Priyam)
 The input layer turns a frame table into model inputs (PR 2 schemas plus the dead-ball block). One function, called
@@ -44,8 +44,9 @@ for m in split["train"]:
 Rules, each tied to a risk-register row:
 1. **Same function, both datasets.** No `if sportec:` branches and no BAR-ATH paths, `GAMES` constants or team names
    inside `make_inputs`. Pitch is an argument (B3/B4); for mirroring call `ft.swap_sides(table, length=pitch[0])`.
-2. **Start from `ft.model_columns()`.** It already drops `tag_*`, `hom_*`, `graded`, `pre_kickoff`, `frame` and
-   `ball_speed_atd_ms` (B5). PR 2 schemas 01–03 only; schema 04 (Smart Tagging) is out (Kalhan's PRs below).
+2. **Start from `ft.model_columns()`.** It keeps our generated tags (`gtag_*`) and drops Metrica's `tag_*`, `hom_*`,
+   `graded`, `pre_kickoff`, `frame` and `ball_speed_atd_ms` (B5). PR 2 schemas 01–03 as written; schema 04's tag
+   fields come from `gtag_*` (mapping in "Generated Smart Tagging"), never from Metrica's `tag_*`.
 3. **Never read `data/sportec_labels/`** inside input code (A2). `meta.json` damage params are never features.
 4. **Windows stop at half boundaries.** Rolling or lagged features must not cross the `period` change. Sportec halves
    sit back to back with no halftime rows, so a window that crosses mixes two halves (see `_rolling` in
@@ -93,7 +94,9 @@ with one row per frame. It contains:
 | dead-ball signals (~16) | frame table dead-ball block | `ball_range_*_1s_m`, `pl_slow_share`, `ball_dist_touchline_m`, `dead_ball_conf` |
 | context (1) | frame table | `home_attacks_right` |
 
-Out of `X`: Smart Tagging (`tag_*`, schema 04, smoother only), homography, raw slot positions, labels, `meta.json`.
+| generated tags (schema 04) | `src/features/tagger.py`, same code on every match | `gtag_poss`, `gtag_phase`, `gtag_transition`, `gtag_long_ball`, `gtag_final_third`, `gtag_in_box`, `gtag_players_in_box_n`, `gtag_setpiece` |
+
+Out of `X`: Metrica's Smart Tagging (`tag_*`, smoother only), homography, raw slot positions, labels, `meta.json`.
 
 **Step 2. Each approach reads `X` in its own shape.** The split is the same for all four: train 4, validate 2, test 1.
 
@@ -185,21 +188,46 @@ Sportec matches BAR-ATH.
 | D1, D3, D7 | overfit to validate, damage dependence, smoother doing all the work | `--pred` / `--model-only` | after training |
 | E1 | BAR-ATH's second-half wait before kickoff (2,934 graded frames, always D) has no Sportec equivalent, so the model never trained on it | `--bar-ath-pred <submission.csv>`: share of `pre_kickoff` frames predicted D; flag < 0.99 | at inference; if flagged, force D on `pre_kickoff` after the smoother (the evaluator's own rule) |
 
-## Kalhan's PRs
-- PR 2 schemas 01–03 run on these bundles as they are. Schema 04 (direct Smart Tagging) stays out of P2–P5: Sportec has no tags.
-- PR 4 (synthetic Smart Tagging for Sportec) is **not** used for model inputs yet. We read Sportec with our own
-  `iterparse` reader because PR 4's adapter has no speed or `Z` and indexes rows across the halftime frame-number gap.
-  What would have to change before its tags could feed schema 04:
-  1. Phase tags use `possession = ball_possession_team_index` (DFL `BallPossession`, i.e. the label), so the tag team
-     *is* the answer (risk A1). Use `nearest_team` only.
-  2. Generate tags from these damaged bundles, not the clean raw XML (A4).
-  3. `SET PIECES` / `GOALS` come exactly from human events, while Metrica's are loose and often `Team=N/A` (A5). Drop
-     them or make them as loose as Metrica's.
-  4. The generated `Confidence` label does not exist in Metrica's tags, so it must never become a feature.
-  5. `TrackingFrames.participants_by_slot` (PersonId, shirt numbers, names) and `ball_is_in_play` must not reach any
-     feature (A2).
-  6. Missing codes (transitions, long ball, box) must be added if schema 04 is tested.
-  7. Its `frame_table.py` changes (`v1`, `TRACKING_FEATURE_COLS`) must merge cleanly with the dead-ball columns on `main`.
+## Generated Smart Tagging (schema 04)
+Sportec has no Smart Tagging, and Metrica's tagger can't be reproduced, so the model reads **our own tags, generated
+the same way on every match**: Sportec bundles and BAR-ATH alike. Metrica's real tags stay in the smoother.
+`src/features/tagger.py` is a pure function of the frame table and slot arrays (no labels, events or provider
+possession). `build_table` adds its output as `gtag_*`. `python scripts/generate_smart_tagging.py` also writes it as
+Smart Tagging XML (`<M>_tactical_smart_tagging.xml` in each bundle, and `data/generated/BAR-ATH_generated_smart_tagging.xml`),
+which passes `scripts/smart_tagging_audit.py`.
 
-  Once fixed, the same tag generator runs on BAR-ATH too, and the model reads *our* generated tags there, not
-  Metrica's. Keep schema 04 only if it beats schema 03 under the keep rule.
+**Possession guess (`gtag_poss`):** the confident nearest team (nearest player at least 1 m clearer), held through
+ball gaps, never across a period change, with runs under 2 s replaced by the ±2 s majority. It is a tracking proxy:
+it matches the true team on 67–80% of live Sportec frames, vs `nearest_team` alone at 70–78% (diagnostic A1, flag
+> 0.9 = leak).
+
+| Metrica code | our rule | column |
+|---|---|---|
+| BUILD UP / PROGRESSION / CREATING CHANCES (+ mirrored DEFENDING IN … THIRD) | guess = team and ball (held through gaps) in its own / middle / attacking third ≥ 5 s | `gtag_phase` |
+| ATTACKING / DEFENSIVE TRANSITION | guess switches and the new team gains ≥ 15 m within 5 s; 10 s tag; low confidence | `gtag_transition` |
+| LONG BALL | visible ball ≥ 30 m within 2.5 s at ≤ 40 m/s; 5 s tag | `gtag_long_ball` |
+| BALL IN FINAL THIRD | ball (≤ 1 s gaps bridged) in a team's attacking third ≥ 5 s; `Side` | `gtag_final_third` |
+| BALL IN THE BOX | ball in a team's attacking box ≥ 1 s (padded to 5 s); `Direction of ball entry` | `gtag_in_box` |
+| PLAYERS IN THE BOX | ≥ 3 tracks of a team in the opponent box ≥ 5 s; `Max Players in the box` | `gtag_players_in_box_n` |
+| SET PIECES | still ball in the last 3 s then a kick; type by location (corner ≤ 2 m, touchline ≤ 1 m, centre ≤ 2 m, goal area); open-field free kicks also need most players slow; team N/A | `gtag_setpiece` |
+| GOALS | not generated: no reliable tracking-only cue | none |
+
+Sources for the rules: the zone rule is the industry baseline (StatsBomb; Metrica describes its own build-up tag as
+"possession in the defensive third"). The 2 s majority smoothing and the weakness of standalone rules come from Li &
+Link 2026 (arXiv 2606.09289). The 5 s transition window follows Bauer & Anzer 2021. FIFA EFI has long ball and set
+plays as phases of their own.
+
+**Measured, report only (never tuned toward):**
+- Set pieces vs DFL restart events on Sportec: recall 40–50%, precision 67–81%. Hidden balls (39% at restarts) cap
+  recall.
+- Generated vs Metrica on BAR-ATH: our tags are more numerous and shorter. Frame agreement is 0.61 for build up, about
+  0.3–0.4 for the territorial codes, and low for set pieces, because Metrica's set-piece intervals start earlier and
+  last about 35 s (diagnostic F1).
+- Keep schema 04 (`gtag_*`) only if it beats schema 03 under the keep rule.
+
+## Kalhan's PRs
+- PR 2 schemas 01–03 run on these bundles as they are. Schema 04's tag fields come from `gtag_*` (section above).
+- PR 4 was reworked in place. Its tags used DFL `BallPossession` (the label), the clean ball and exact human set
+  pieces, and its `TrackingFrames` carried PersonId and shirt numbers. Those paths are removed, and `src/features/tagger.py`
+  replaces them. Kept from PR 4: the XML writer (`src/data/idsse_smart_tagging.py`), the structural audit
+  (`scripts/smart_tagging_audit.py`) and the reference profile. See `SMART_TAGGING_EVIDENCE.md` (2026-11-08).

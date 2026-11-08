@@ -95,13 +95,54 @@ def input_markers(name, table, slots, labels=None):
         st = pm.possession_stats(c, runs)
         r["C1_{}_spells".format(k)], r["C1_{}_mean_s".format(k)] = st["n_spells"], st["mean_duration_s"]
     r["label_share_HAD"] = "/".join("{:.2f}".format((lab == k).mean()) for k in "HAD")
+    # A1: the generated-tag possession guess must look like a tracking proxy (~nearest_team quality), not the label
+    guess = np.where(table["gtag_poss"].to_numpy() > 0, "H", np.where(table["gtag_poss"].to_numpy() < 0, "A", ""))
+    known = alive & (guess != "")
+    r["A1_gtag_poss_agree"] = float((guess[known] == lab[known]).mean()) if known.any() else np.nan
+    nt = table["nearest_team"].to_numpy()
+    ntl = np.where(nt == 0, "H", np.where(nt == 1, "A", ""))
+    seen = alive & (ntl != "")
+    r["A1_nearest_team_agree"] = float((ntl[seen] == lab[seen]).mean()) if seen.any() else np.nan
     return r
+
+
+def tag_comparison(table, slots, pitch, fps):
+    """F1 (report only, never a target): our generated tags vs Metrica's Smart Tagging on BAR-ATH, per code."""
+    from starter import load_smart_tagging
+    from src.features import tagger
+    gen, _ = tagger.generate_tags(table, slots, pitch, fps)
+    team_of = {"barcelona": "Home", "atletic club": "Away", "athletic club": "Away"}
+    n = len(table)
+    cover = {}
+    for t in gen:
+        key = (t.code, t.labels.get("Team"))
+        cover.setdefault(key, np.zeros(n, bool))[int(t.start_s * fps):int(t.end_s * fps)] = True
+    rows = {}
+    for e in load_smart_tagging.load():
+        code, team = e["code"], team_of.get((e["tags"].get("Team") or "").strip().lower(), "N/A")
+        m = cover.get((code, team))
+        r = rows.setdefault(code, {"metrica_n": 0, "metrica_median_s": [], "agree": []})
+        r["metrica_n"] += 1
+        r["metrica_median_s"].append((e["end_frame"] - e["start_frame"]) / fps)
+        a, b = max(0, e["start_frame"]), min(n, e["end_frame"])
+        r["agree"].append(m[a:b].mean() if m is not None and b > a else 0.0)
+    for t in gen:
+        r = rows.setdefault(t.code, {"metrica_n": 0, "metrica_median_s": [], "agree": []})
+        r.setdefault("ours", []).append(t.end_s - t.start_s)
+    out = pd.DataFrame({c: {"metrica_n": r["metrica_n"],
+                            "metrica_median_s": np.median(r["metrica_median_s"]) if r["metrica_median_s"] else np.nan,
+                            "ours_n": len(r.get("ours", [])),
+                            "ours_median_s": np.median(r["ours"]) if r.get("ours") else np.nan,
+                            "frame_agree": np.mean(r["agree"]) if r["agree"] else np.nan} for c, r in rows.items()}).T
+    return out.sort_index()
 
 
 def flags(r, ref):
     out = []
     if r.get("A2_max_mi_HA_bits", 0) > 0.6:
         out.append("A2 a column nearly determines H/A (label proxy?)")
+    if r.get("A1_gtag_poss_agree", 0) > 0.9:
+        out.append("A1 generated possession guess too close to the label")
     if r.get("A3_hidden_skew", 0) > 0.08:
         out.append("A3 gaps skew by label")
     if r.get("B5_constant_model_cols", "-") != "-":
@@ -183,6 +224,10 @@ def main():
         rows.append(r)
     pd.set_option("display.width", 250)
     print(pd.DataFrame(rows).set_index("match").T.to_string(float_format=lambda v: "{:.3f}".format(v)))
+    if not a.no_reference:
+        from games import GAME, GAMES
+        print("\nF1 generated tags vs Metrica Smart Tagging on BAR-ATH (report only; never tune the tagger to this)")
+        print(tag_comparison(t, s, GAMES[GAME]["pitch"], GAMES[GAME]["fps"]).to_string(float_format=lambda v: "{:.2f}".format(v)))
     if a.bar_ath_pred:
         print(pre_kickoff_check(ft.load(), a.bar_ath_pred))
     if not a.pred:

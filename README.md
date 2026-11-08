@@ -107,6 +107,13 @@ Full description of every asset and how the frames line up: **[DATA.md](DATA.md)
 
 ---
 
+## Training data and generated Smart Tagging
+
+Our models train on external Sportec matches converted to this tracking format, with Smart-Tagging-style tags
+generated from tracking: see [docs/data-layer/SPORTEC.md](docs/data-layer/SPORTEC.md).
+
+---
+
 ## Read these, in this order
 
 | | |
