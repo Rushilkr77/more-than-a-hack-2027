@@ -1,0 +1,6 @@
+{
+  "_note": "Fixed for P2-P5 (same split for every approach). train: fit weights on labels_raw. validate: hyperparameters, early stopping, smoother tuning on labels_adjusted. test: scored once at the end, no decisions. One Bundesliga (COM-000001) match in validate, one in train; the rest are 2. Bundesliga (COM-000002). No match is an outlier on H/A/D shares or possession length. Test J03WQQ has the lowest ball visibility (0.51), the harder case. See docs/data-layer/SPORTEC.md.",
+  "train": ["J03WN1", "J03WOH", "J03WPY", "J03WR9"],
+  "validate": ["J03WMX", "J03WOY"],
+  "test": ["J03WQQ"]
+}

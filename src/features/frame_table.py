@@ -288,12 +288,19 @@ def _tag_columns(events, n_frames):
     return cum(n_active), cum(n_home), cum(n_away), setpiece, setpiece_team, hint
 
 
-def build_table(data_dir=None, n_frames=None, blocks=None, kickoffs=None):
-    """(frame table, slots) from the raw bundle. Pure function of the input files."""
-    n_frames = n_frames or source_frames()
-    blocks, kickoffs = _defaults(blocks, kickoffs)
-    paths = asset_paths(data_dir=data_dir)
-    slots = atd.load_slots(paths["atd_meta"], paths["atd_raw"], n_frames, GAMES[GAME]["pitch"])
+def build_table(data_dir=None, n_frames=None, blocks=None, kickoffs=None, paths=None, pitch=None, fps=None):
+    """(frame table, slots) from the raw bundle. Pure function of the input files.
+
+    Defaults are BAR-ATH. Another match in the same ATD format (e.g. a damaged Sportec bundle, see
+    `bundle_table`) passes its own `paths`, `pitch`, `fps`, `blocks` and `kickoffs`; homography and Smart Tagging
+    are optional there (absent -> hom_valid False / NaN and tag columns 0 / -1).
+    """
+    if paths is None:
+        n_frames = n_frames or source_frames()
+        blocks, kickoffs = _defaults(blocks, kickoffs)
+        paths = asset_paths(data_dir=data_dir)
+    pitch, fps = pitch or GAMES[GAME]["pitch"], fps or GAMES[GAME]["fps"]
+    slots = atd.load_slots(paths["atd_meta"], paths["atd_raw"], n_frames, pitch)
 
     frame = np.arange(n_frames)
     cols = {"frame": frame}
@@ -315,18 +322,21 @@ def build_table(data_dir=None, n_frames=None, blocks=None, kickoffs=None):
     cols["nearest_team"] = np.where(np.isfinite(h) & (~np.isfinite(a) | (h <= a)), 0,
                                     np.where(np.isfinite(a), 1, -1))
 
-    hom = pd.read_csv(paths["homography"], usecols=["frame", "reprojection_error", "valid"])
-    if len(hom) != n_frames or not (hom["frame"].to_numpy() == frame).all():
-        raise ValueError("homography rows are not frames 0..{}".format(n_frames - 1))
-    cols["hom_valid"] = hom["valid"].to_numpy().astype(bool)
-    cols["hom_reproj_err"] = hom["reprojection_error"].to_numpy()
+    if paths.get("homography"):
+        hom = pd.read_csv(paths["homography"], usecols=["frame", "reprojection_error", "valid"])
+        if len(hom) != n_frames or not (hom["frame"].to_numpy() == frame).all():
+            raise ValueError("homography rows are not frames 0..{}".format(n_frames - 1))
+        cols["hom_valid"] = hom["valid"].to_numpy().astype(bool)
+        cols["hom_reproj_err"] = hom["reprojection_error"].to_numpy()
+    else:
+        cols["hom_valid"], cols["hom_reproj_err"] = np.zeros(n_frames, bool), np.full(n_frames, np.nan)
 
-    events = load_smart_tagging.load(data_dir=data_dir)
+    events = load_smart_tagging.load(data_dir=data_dir) if paths.get("smart_tagging") else []
     (cols["tag_n_active"], cols["tag_home_n"], cols["tag_away_n"],
      cols["tag_setpiece"], cols["tag_setpiece_team"], cols["tag_poss_hint"]) = _tag_columns(events, n_frames)
 
     # orientation, ball confidence, shape (own-goal-distance coordinates)
-    length, width = GAMES[GAME]["pitch"]
+    length, width = pitch
     h1_right = attack_direction_first_half(paths["atd_meta"])
     right = np.where(cols["period"] == 2, not h1_right, h1_right)
     cols["home_attacks_right"] = right
@@ -343,7 +353,7 @@ def build_table(data_dir=None, n_frames=None, blocks=None, kickoffs=None):
             cols["{}_{}".format(name, c)] = v
         cols[name + "_shape_conf"] = conf
     cols.update(dead_ball_columns(slots["x"], slots["y"], slots["s"], slots["team"], slots["ball_x"], slots["ball_y"],
-                                  cols["period"], right, length, width, GAMES[GAME]["fps"]))
+                                  cols["period"], right, length, width, fps))
 
     table =pd.DataFrame({name: np.asarray(cols[name]).astype(dtype) for name, dtype, _ in SCHEMA})
     slot_arrays = {"x": slots["x"].astype(np.float32), "y": slots["y"].astype(np.float32),
@@ -351,8 +361,41 @@ def build_table(data_dir=None, n_frames=None, blocks=None, kickoffs=None):
     return table, slot_arrays
 
 
-def swap_sides(table):
-    """Mirror the table with home and away exchanged (training-time augmentation / symmetry tests)."""
+def bundle_args(meta_path):
+    """build_table kwargs read from an ATD metadata XML that states its halves (Sportec bundles do; BAR-ATH's does
+    not, it uses games.py). Halves are 0-based inclusive frame rows; kickoff = first frame of each half."""
+    import xml.etree.ElementTree as ET
+    root = ET.parse(meta_path).getroot()
+    par = {p.findtext("Name"): p.findtext("Value") for p in root.iter("ProviderParameter")}
+    halves = [(1, int(par["first_half_start"]), int(par["first_half_end"])),
+              (2, int(par["second_half_start"]), int(par["second_half_end"]))]
+    return {"n_frames": halves[1][2] + 1, "blocks": halves, "kickoffs": {1: halves[0][1], 2: halves[1][1]},
+            "pitch": (float(root.findtext(".//FieldSize/Width")), float(root.findtext(".//FieldSize/Height"))),
+            "fps": int(float(root.findtext(".//FrameRate")))}
+
+
+def bundle_table(bundle_dir):
+    """(frame table, slots) for a damaged Sportec bundle folder, e.g. data/sportec_bundles/J03WMX. Same code path and
+    same columns as BAR-ATH. Reads only <bundle>/tactical/<M>_tactical_atd.{xml,txt}; never the label folder."""
+    match = os.path.basename(os.path.normpath(bundle_dir))
+    stem = os.path.join(bundle_dir, "tactical", match + "_tactical_atd")
+    paths = {"atd_meta": stem + ".xml", "atd_raw": stem + ".txt"}
+    return build_table(paths=paths, **bundle_args(paths["atd_meta"]))
+
+
+# Columns a model may read. Excluded: identifiers and grading flags (frame, graded, pre_kickoff), BAR-ATH-only feeds
+# that are constant on Sportec (hom_*, tag_*: Smart Tagging is smoother-only), and ball_speed_atd_ms (unreliable).
+# A column constant on the training matches teaches "which dataset is this", not football.
+MODEL_EXCLUDE = ("frame", "graded", "pre_kickoff", "ball_speed_atd_ms", "hom_valid", "hom_reproj_err")
+
+
+def model_columns(columns=None):
+    return [c for c in (columns or COLUMNS) if c not in MODEL_EXCLUDE and not c.startswith("tag_")]
+
+
+def swap_sides(table, length=None):
+    """Mirror the table with home and away exchanged (training-time augmentation / symmetry tests).
+    `length`: the table's pitch length in metres (default BAR-ATH); pass bundle_args()['pitch'][0] for Sportec."""
     t = table.copy()
     for col in table.columns:
         if col.startswith("home_") and col != "home_attacks_right":
@@ -366,7 +409,7 @@ def swap_sides(table):
     t["tag_setpiece_team"] = flip(table["tag_setpiece_team"].to_numpy()).astype(table["tag_setpiece_team"].dtype)
     t["tag_poss_hint"] = (-table["tag_poss_hint"].to_numpy()).astype(table["tag_poss_hint"].dtype)
     t["home_attacks_right"] = ~table["home_attacks_right"].to_numpy()
-    t["ball_home_adv_m"] = (GAMES[GAME]["pitch"][0] - table["ball_home_adv_m"]).astype(table["ball_home_adv_m"].dtype)
+    t["ball_home_adv_m"] = ((length or GAMES[GAME]["pitch"][0]) - table["ball_home_adv_m"]).astype(table["ball_home_adv_m"].dtype)
     third = table["ball_third_home"].to_numpy()
     t["ball_third_home"] = np.where(third >= 0, 2 - third, third).astype(third.dtype)
     return t
