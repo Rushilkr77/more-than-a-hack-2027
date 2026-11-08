@@ -23,7 +23,7 @@ Conventions
 - Raw position columns (`*_cx_m`, `ball_x_m`, ...) are metres on a {length} x {width} m pitch in the ATD's own orientation (NOT flipped per half).
 - Shape and ball-territory columns (`*_dline_m`, `*_cen_m`, `*_fwd_m`, `*_line_gap_m`, `*_defensive_line_position_m`, `*_midfield_line_position_m`, `*_forward_line_position_m`, `ball_home_adv_m`) are "metres from that team's own goal line": bigger = more advanced, same meaning in both halves, via `home_attacks_right`.
 - Missing is NaN for floats; counts are 0; booleans are never null. A missing ball is `ball_visible == False`, never "dead ball".
-- Reliability columns: `home_shape_conf`, `away_shape_conf` (0..1), `ball_margin_m` (bigger = more trustworthy `nearest_team`). Hints (`tag_poss_hint`) are noisy weak labels.
+- Reliability columns: `home_shape_conf`, `away_shape_conf`, `dead_ball_conf`, `dead_player_conf` (0..1), `ball_margin_m` (bigger = more trustworthy `nearest_team`). Hints (`tag_poss_hint`) are noisy weak labels.
 
 | column | dtype | meaning |
 |---|---|---|
