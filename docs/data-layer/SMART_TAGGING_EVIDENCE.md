@@ -2,6 +2,8 @@
 
 This note records how we established the Smart Tagging XML contract before attempting to map event data from other football matches. It contains no licensed match data or private Drive links.
 
+> **Superseded in part (2026-11-08):** the generators described in the 2026-11-05/06 sections (events-based, `BallPossession`-based, `src/tracking.py`) were removed because they leak the label. The XML contract and audit below still hold. See the last section, "Rework".
+
 ## Scope and source
 
 - **Question:** Can external football event data be converted into a Smart Tagging-compatible XML dataset for model training?
@@ -145,3 +147,20 @@ For the downloaded full J03WPY Sportec position feed, the command below produced
 The output code counts are 73 `BUILD UP`, 84 `PROGRESSION`, 40 `CREATING CHANCES`, 40 `DEFENDING IN DEFENSIVE THIRD`, 84 `DEFENDING IN MIDDLE THIRD`, 73 `DEFENDING IN ATTACKING THIRD`, 93 `SET PIECES`, and 1 `GOALS`.
 
 The previous nearest-player proxy agrees with Sportec's supplied possession on only 74.76% of provider-labelled J03WPY frames, disagreeing on 36,906 frames; it is therefore no longer used when provider possession exists. No transition label is produced: a player-contact-level possession estimate is too noisy to represent a turnover. `LONG BALL` and the three ball/box codes are also deliberately absent. The ball/box codes are not optional parent tags: the reference schema requires `Side`, `Direction of ball entry`, and/or `Max Players in the box`. They need separate, evidence-backed sublabel derivations before becoming training labels.
+
+## Rework: one tracking-only tagger for every match (2026-11-08)
+
+The phase records above used Sportec's `BallPossession`, which is the training label, so a tag's team *was* the
+answer (risk A1 in `SPORTEC.md`). They also read the clean ball (A4) and copied exact restarts from human events
+(A5), and `TrackingFrames` carried PersonId and shirt numbers (A2). On BAR-ATH the model would have seen Metrica's
+tags instead, which come from a different and unknown algorithm.
+
+Changes:
+- Removed: `src/data/idsse_phase_inference.py`, `src/tracking.py`, both `generate_idsse_*` scripts, the events-based
+  `generate()`, their tests and `docs/tracking/README.md`. All were added by this PR; no base-repo file was deleted.
+- New: `src/features/tagger.py` generates the Smart Tagging codes from the frame table only, identically on the Sportec
+  bundles and on BAR-ATH. `build_table` exposes the result as `gtag_*`, and `scripts/generate_smart_tagging.py` writes
+  it as XML that passes this file's audit with zero errors. Metrica's tags stay smoother-only.
+- Kept: the XML contract, the audit, the writer and the reference profile.
+
+Rules, sources and measured quality are in `SPORTEC.md`, section "Generated Smart Tagging".

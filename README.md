@@ -107,30 +107,10 @@ Full description of every asset and how the frames line up: **[DATA.md](DATA.md)
 
 ---
 
-## Generate Smart Tagging training XML
+## Training data and generated Smart Tagging
 
-The optional IDSSE/Sportec generator creates Smart Tagging-compatible weak labels from the public `pysport/idsse-data` feed. Generated XML and downloaded feeds stay in ignored `outputs/` and `data/` directories.
-
-Generate direct restart and goal labels for all seven matches:
-
-```bash
-.venv/bin/python scripts/generate_idsse_smart_tagging.py --all --output-dir outputs/idsse
-```
-
-For a match with its events, metadata, and full `positions.xml` already downloaded locally, generate the ball-aware phase labels too:
-
-```bash
-.venv/bin/python scripts/generate_idsse_inferred_smart_tagging.py \
-  --events data/idsse/full/J03WMX_events.xml \
-  --metadata data/idsse/full/J03WMX_metadata.xml \
-  --positions data/idsse/full/J03WMX_positions.xml \
-  --output outputs/idsse/J03WMX_inferred_smart_tagging.xml
-
-.venv/bin/python scripts/smart_tagging_audit.py \
-  outputs/idsse/J03WMX_inferred_smart_tagging.xml --fail-on-error
-```
-
-The first-pass phase labels are deliberately weak training labels. Sportec's supplied possession and ball-status fields are used when present; the nearest-player estimate is only a fallback for providers that lack them. Transitions, long balls, and box codes are not emitted until their required sublabels can be derived and validated. See [the evidence chain](docs/data-layer/SMART_TAGGING_EVIDENCE.md) for the XML contract, confidence policy, and current limits.
+Our models train on external Sportec matches converted to this tracking format, with Smart-Tagging-style tags
+generated from tracking: see [docs/data-layer/SPORTEC.md](docs/data-layer/SPORTEC.md).
 
 ---
 

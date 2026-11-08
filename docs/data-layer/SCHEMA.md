@@ -6,7 +6,7 @@ One row per tactical-video frame (199,319 rows), `frame` 0-based, row i == frame
 
 Conventions
 - Raw position columns (`*_cx_m`, `ball_x_m`, ...) are metres on a 105.3 x 68.0 m pitch in the ATD's own orientation (NOT flipped per half).
-- Shape and ball-territory columns (`*_dline_m`, `*_cen_m`, `*_fwd_m`, `*_line_gap_m`, `*_defensive_line_position_m`, `*_midfield_line_position_m`, `*_forward_line_position_m`, `ball_home_adv_m`) are "metres from that team's own goal line": bigger = more advanced, same meaning in both halves, via `home_attacks_right`.
+- Shape and ball-territory columns (`*_dline_m`, `*_cen_m`, `*_fwd_m`, `*_line_gap_m`, `ball_home_adv_m`) are "metres from that team's own goal line": bigger = more advanced, same meaning in both halves, via `home_attacks_right`.
 - Missing is NaN for floats; counts are 0; booleans are never null. A missing ball is `ball_visible == False`, never "dead ball".
 - Reliability columns: `home_shape_conf`, `away_shape_conf`, `dead_ball_conf`, `dead_player_conf` (0..1), `ball_margin_m` (bigger = more trustworthy `nearest_team`). Hints (`tag_poss_hint`) are noisy weak labels.
 
@@ -74,3 +74,11 @@ Conventions
 | `away_own_half_share` | float32 | share of on-pitch away tracks in the away half; NaN if none |
 | `dead_ball_conf` | float32 | reliability 0..1 of the ball dead-ball columns: clip(ball_n_obs_1s / 25, 0, 1) * (1 - share of steps dropped as jumps); 0 = columns NaN |
 | `dead_player_conf` | float32 | reliability 0..1 of pl_slow_share / pl_fast_share: clip(valid speeds in +-25 frames / 300, 0, 1); 0 = columns NaN |
+| `gtag_poss` | int8 | generated: tagger's possession guess (confident nearest team, held through ball gaps, 2 s majority smoothing): +1 home, -1 away, 0 unknown. A tracking proxy, not the label |
+| `gtag_phase` | int8 | generated: in-possession phase of the gtag_poss team while a >=5 s phase tag is active: 1 build up, 2 progression, 3 creating chances, 0 none |
+| `gtag_transition` | int8 | generated: attacking transition (regain + >=15 m ball progress within 5 s; 10 s tag): +1 home, -1 away, 0 none. Low confidence |
+| `gtag_long_ball` | int8 | generated: long ball (>=30 m within 2.5 s; 5 s tag) by the gtag_poss team: +1 home, -1 away, 0 none |
+| `gtag_final_third` | int8 | generated: ball in a team's attacking third >=5 s (territorial, possession-free): +1 home's attacking third, -1 away's, 0 none |
+| `gtag_in_box` | int8 | generated: ball in a team's attacking penalty area >=1 s (tag padded to 5 s): +1 home, -1 away, 0 none |
+| `gtag_players_in_box_n` | int8 | generated: while >=3 tracks of one team are in the opponent box for >=5 s, that count signed (+ home, - away); 0 otherwise. Tracklet duplicates inflate it |
+| `gtag_setpiece` | int8 | generated: restart from tracking (ball still in the last 3 s, then kicked; open-field free kicks also need most players slow) for 5 s; type by location: 1 throw-in, 2 corner, 3 goal kick, 4 free kick, 5 kick-off (start), 6 kick-off (after goal), 0 none. Team unknown |
