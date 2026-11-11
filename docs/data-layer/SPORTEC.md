@@ -14,39 +14,56 @@ Sportec   data/sportec_bundles/<M>/tactical/<M>_tactical_atd.{txt,xml} ─┘
 ```bash
 python scripts/build_sportec_bundles.py     # ~2 min, all 7 matches; raw XMLs in data/sportec/ (figshare 28196177)
 python scripts/diagnostics_round1.py        # risk-register markers with a FLAG row
+python scripts/validate_model_inputs.py     # schemas, split/label alignment, leakage and parity gate
 ```
 ```python
 from src.features import frame_table as ft
-table, slots = ft.bundle_table("data/sportec_bundles/J03WMX")   # same 62 columns as ft.load() on BAR-ATH
-X = table[ft.model_columns()]                                   # model inputs: gtag_* in; Metrica tag_*, hom_*, graded, frame out
+from src.features import classification_inputs
+from src.features import model_inputs
+
+table, slots = ft.bundle_table("data/sportec_bundles/J03WMX")   # same 70 columns as ft.load() on BAR-ATH
+policy = classification_inputs.InputPolicy(
+    schema=model_inputs.SCHEMA_PHASE,
+    temporal_mode=classification_inputs.TemporalMode.OFFLINE_ACAUSAL,
+)
+inputs = classification_inputs.make_classification_inputs(table, slots, (105.0, 68.0), policy, fps=25)
+X = inputs.frame_features                  # flat 80-column view
+players, ball = inputs.players, inputs.ball  # structured trajectory views
 ```
-## Contract for the final input methods (Priyam)
-The input layer turns a frame table into model inputs (PR 2 schemas plus the dead-ball block). One function, called
-identically for training and inference:
+## Final input methods
+`src/features/model_inputs.py` implements the four PR 2 flat designs plus the dead-ball block.
+`src/features/classification_inputs.py` consolidates a selected flat schema with anonymous player-set and ball
+trajectories for temporal/set models. One function is called identically for training and inference. Schemas 03/04
+also take anonymous slot arrays because their designed ahead/behind/support fields cannot be recovered from aggregate
+frame-table columns alone. The evidence and trade-offs are recorded in `docs/model-inputs/`:
 
 ```python
 import json
 from src.features import frame_table as ft
-
-def make_inputs(table, pitch):            # table: one match's frame table; pitch: (length, width) metres
-    ...                                   # derive PR 2 schema 01-03 fields from ft.model_columns() + window features
-    return X                              # DataFrame, one row per frame, same columns for every match
+from src.features import classification_inputs
+from src.features import model_inputs
 
 split = json.load(open("configs/sportec_split.json"))
+policy = classification_inputs.InputPolicy(
+    schema=model_inputs.SCHEMA_PHASE,
+    temporal_mode=classification_inputs.TemporalMode.OFFLINE_ACAUSAL,
+)
 for m in split["train"]:
-    table, _ = ft.bundle_table("data/sportec_bundles/" + m)
-    pitch = ft.bundle_args("data/sportec_bundles/{0}/tactical/{0}_tactical_atd.xml".format(m))["pitch"]
-    X = make_inputs(table, pitch)
+    table, slots = ft.bundle_table("data/sportec_bundles/" + m)
+    args = ft.bundle_args("data/sportec_bundles/{0}/tactical/{0}_tactical_atd.xml".format(m))
+    inputs = classification_inputs.make_classification_inputs(
+        table, slots, args["pitch"], policy, fps=args["fps"])
+    X = inputs.frame_features
     y = pd.read_csv("data/sportec_labels/{}/labels_raw.csv".format(m))["label"]   # the TRAINING LOOP reads labels, not make_inputs
-# inference: X = make_inputs(ft.load(), GAMES["BAR-ATH"]["pitch"])
+# inference uses the same call with ft.load(), ft.load_slots(), and BAR-ATH pitch/fps
 ```
 
 Rules, each tied to a risk-register row:
 1. **Same function, both datasets.** No `if sportec:` branches and no BAR-ATH paths, `GAMES` constants or team names
    inside `make_inputs`. Pitch is an argument (B3/B4); for mirroring call `ft.swap_sides(table, length=pitch[0])`.
-2. **Start from `ft.model_columns()`.** It keeps our generated tags (`gtag_*`) and drops Metrica's `tag_*`, `hom_*`,
-   `graded`, `pre_kickoff`, `frame` and `ball_speed_atd_ms` (B5). PR 2 schemas 01–03 as written; schema 04's tag
-   fields come from `gtag_*` (mapping in "Generated Smart Tagging"), never from Metrica's `tag_*`.
+2. **Explicit allow-lists.** Each schema selects only its declared columns. This keeps our generated tags (`gtag_*`)
+   in schema 04 and drops Metrica's `tag_*`, `hom_*`, `graded`, `pre_kickoff`, `frame`, labels and damage metadata.
+   Future frame-table columns cannot silently become model inputs.
 3. **Never read `data/sportec_labels/`** inside input code (A2). `meta.json` damage params are never features.
 4. **Windows stop at half boundaries.** Rolling or lagged features must not cross the `period` change. Sportec halves
    sit back to back with no halftime rows, so a window that crosses mixes two halves (see `_rolling` in
@@ -64,11 +81,11 @@ Rules, each tied to a risk-register row:
 
 ## From bundle to P2–P5: the end-to-end flow
 ```
-data/sportec_bundles/<M>  ──ft.bundle_table──►  frame table (62 cols, 1 row / frame)
+data/sportec_bundles/<M>  ──ft.bundle_table──►  frame table (70 cols, 1 row / frame)
                                                     │
-                          Priyam: make_inputs(table, pitch)  ← same call on BAR-ATH (ft.load())
+                     make_inputs(table, pitch, schema, slots, fps)  ← same call on BAR-ATH
                                                     ▼
-                          X: [frames × ~60 input columns], NaN kept + *_conf / ball_visible beside each block
+                      X: 20 / 32 / 60 / 80 columns by schema; NaN and quality flags kept
                                                     │
                   ┌──────────────────┬──────────────┴─────┬───────────────────┐
                   ▼                  ▼                    ▼                   ▼
@@ -82,8 +99,8 @@ data/sportec_bundles/<M>  ──ft.bundle_table──►  frame table (62 cols, 
                               frame,label  →  spellF1 / macroF1
 ```
 
-**Step 1. Priyam converts (one function, every approach reads its output).** `make_inputs(table, pitch)` returns `X`
-with one row per frame. It contains:
+**Step 1. Build inputs (one function, every approach reads its output).** `make_inputs(...)` returns `X` with one
+row per frame. `frame_id` is the DataFrame index for alignment, not a trainable feature. It contains:
 
 | block | source | examples |
 |---|---|---|
