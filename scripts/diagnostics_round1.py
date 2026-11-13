@@ -158,7 +158,7 @@ def flags(r, ref):
     return "; ".join(out) or "ok"
 
 
-def post_markers(match, labels, table, meta, pred_dir, raw_dir):
+def post_markers(match, table, labels, meta, pred_dir, raw_dir):
     gt = pm.label_codes(labels["adjusted"])
     runs = pm.valid_runs(gt)
     pred = pm.fill_abstentions(pm.label_codes(pm.read_label_csv(os.path.join(pred_dir, match + ".csv"))), runs)
