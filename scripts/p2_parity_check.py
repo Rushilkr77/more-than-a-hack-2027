@@ -1,16 +1,16 @@
 """Inputs-only parity + BAR-ATH output shape for P2 variants. No BAR-ATH labels are read."""
-import sys, json, os
+import sys, os
 ROOT = __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 sys.path.insert(0, ROOT); sys.path.insert(0, ROOT + "/scripts")
 import numpy as np, pandas as pd
 import train_p2 as tp
 from src.features import frame_table as ft
 from src.models import p2_gbt
-from src.common.sportec import mirrored
+from src.common.sportec import mirrored, split as sportec_split
 from src.decoder.viterbi import smooth
 from evaluation import possession_metrics as pm
 
-split = json.load(open(ROOT + "/configs/sportec_split.json"))
+split = sportec_split()
 data = {m: tp.load(m) for m in split["train"] + split["validate"]}
 bar = ft.load()
 g = bar["graded"].to_numpy()

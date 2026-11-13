@@ -25,7 +25,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from evaluation import possession_metrics as pm  # noqa: E402
 from src.common import keep_rule  # noqa: E402
-from src.common.sportec import LABELS, PENALTIES, load, mirrored, score, tune_penalty, write  # noqa: E402,F401  common layer
+from src.common.sportec import LABELS, PENALTIES, load, mirrored, score, split as sportec_split, tune_penalty, write  # noqa: E402,F401  common layer
 from src.decoder.viterbi import smooth  # noqa: E402
 from src.models import p2_gbt  # noqa: E402
 OUT = os.path.join(ROOT, "outputs", "p2")
@@ -117,8 +117,7 @@ def main():
     ap.add_argument("--version", choices=sorted(VARIANTS), action="append")
     ap.add_argument("--compare", nargs=2, metavar=("BASE", "CANDIDATE"))
     args = ap.parse_args()
-    with open(os.path.join(ROOT, "configs", "sportec_split.json")) as f:
-        split = json.load(f)
+    split = sportec_split()
     if args.compare:
         return compare(*args.compare, split)
     versions = args.version or [FINAL]

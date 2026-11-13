@@ -22,7 +22,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import train_p2 as tp  # noqa: E402
 from evaluation import possession_metrics as pm  # noqa: E402
-from src.common.sportec import baseline, mirrored  # noqa: E402
+from src.common.sportec import baseline, mirrored, split as sportec_split  # noqa: E402
 from src.decoder import majority  # noqa: E402
 from src.decoder.viterbi import smooth  # noqa: E402
 from src.evidence import ball_nearest  # noqa: E402
@@ -65,7 +65,7 @@ def bar_detail(gt_labels, preds, draws=2000):
 
 
 def main():
-    split = json.load(open(os.path.join(ROOT, "configs", "sportec_split.json")))
+    split = sportec_split()
     penalty = json.load(open(os.path.join(tp.OUT, V, "meta.json")))["switch_penalty"]
     data = {m: tp.load(m) for m in split["train"] + split["validate"]}
 

@@ -21,7 +21,7 @@ import pandas as pd
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from evaluation import possession_metrics as pm  # noqa: E402
-from src.common.sportec import PENALTIES  # noqa: E402
+from src.common.sportec import PENALTIES, split as sportec_split  # noqa: E402
 from src.decoder.viterbi import smooth  # noqa: E402
 from src.common import keep_rule  # noqa: E402
 
@@ -51,7 +51,7 @@ def main():
     ap.add_argument("--variant", default="h_sd_win_1_5_15")
     a = ap.parse_args()
     d = os.path.join(OUT, a.variant)
-    split = json.load(open(os.path.join(ROOT, "configs", "sportec_split.json")))
+    split = sportec_split()
     data = {m: (np.load(os.path.join(d, "proba", m + ".npy")), np.load(os.path.join(d, "proba", m + "_period.npy")),
                 pm.label_codes(pd.read_csv(os.path.join(LABELS, m, "labels_adjusted.csv"))["label"]))
             for m in split["validate"]}

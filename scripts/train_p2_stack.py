@@ -21,7 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import train_p2 as tp  # noqa: E402
-from src.common.sportec import mirrored, tune_penalty  # noqa: E402
+from src.common.sportec import mirrored, split as sportec_split, tune_penalty  # noqa: E402
 from src.decoder.viterbi import smooth  # noqa: E402
 from src.models import p2_gbt  # noqa: E402
 
@@ -63,7 +63,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="v3_jumps")
     a = ap.parse_args()
-    split = json.load(open(os.path.join(ROOT, "configs", "sportec_split.json")))
+    split = sportec_split()
     data = {m: tp.load(m) for m in split["train"] + split["validate"]}      # the test match is never loaded
     base_X = {m: tp.feats(data[m][0], a.base) for m in data}
     Xv = pd.concat([base_X[m].iloc[::tp.STEP] for m in split["validate"]], ignore_index=True)
