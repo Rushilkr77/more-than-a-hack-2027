@@ -26,6 +26,7 @@ import datetime as dt
 import glob
 import json
 import os
+import re
 import sys
 import xml.etree.ElementTree as ET
 import zlib
@@ -83,8 +84,21 @@ MIN_CONTROL_S = 2.0
 CONTROL_EVENTS = ("Play", "ShotAtGoal", "BallClaiming")
 
 
-def ts(value):
-    return dt.datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+_EXCESS_ISO_FRACTION = re.compile(r"(\.\d{6})\d+(?=(?:[+-]\d{2}:\d{2})?$)")
+
+
+def ts(value: str) -> float:
+    """Parse provider timestamps on every supported Python version.
+
+    Sportec and synthetic fixtures may carry nanosecond fractions, while
+    ``datetime.fromisoformat`` accepts at most microseconds on Python 3.9.
+    Truncating only the excess fractional digits preserves the instant to the
+    precision used by the 25 fps pipeline.
+    """
+    if not value:
+        raise ValueError("timestamp is required")
+    normalized = _EXCESS_ISO_FRACTION.sub(r"\1", value.replace("Z", "+00:00"))
+    return dt.datetime.fromisoformat(normalized).timestamp()
 
 
 def match_files(match):

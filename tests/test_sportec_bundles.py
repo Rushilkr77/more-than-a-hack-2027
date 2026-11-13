@@ -17,6 +17,10 @@ spec.loader.exec_module(bsb)
 M, HOME, AWAY, N = "TESTMM", "CLU-H", "CLU-A", 1500       # 60 s per half
 
 
+def test_timestamp_parser_accepts_nanosecond_fraction():
+    assert bsb.ts("2023-11-14T22:13:20.039999962+00:00") == pytest.approx(1_700_000_000.039999)
+
+
 def _write_match(d):
     rng = np.random.default_rng(0)
     t0 = 1_700_000_000.0

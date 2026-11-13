@@ -9,11 +9,13 @@ Owns: loader, frame table, caches, manifests, build command. Watch: schema chang
 > **Since 5 Nov:** rules-based pipelines were dropped; P2–P5 learn from input columns trained on damaged Sportec
 > matches. The briefs below describe the columns; for training use [SPORTEC.md](SPORTEC.md).
 
-## Final input layer (Priyam)
-Combine Kalhan's PR 2 schemas 01–03 with the dead-ball columns into one `make_inputs(table, pitch)` that runs
-unchanged on BAR-ATH and on the Sportec bundles. Follow the contract in [SPORTEC.md](SPORTEC.md) ("Contract for the
-final input methods"). Schema 04's tag fields come from our generated `gtag_*` columns. Metrica's `tag_*` stay smoother-only.
-> Prompt: "Read docs/data-layer/SPORTEC.md and SCHEMA.md. Implement make_inputs(table, pitch) from ft.model_columns() plus PR 2 schema 01-03 fields; schema 04 tag fields map to the gtag_* columns, never Metrica's tag_*. No dataset branches, no BAR-ATH constants, no label files. Windows stop at period changes and NaN stays NaN. Prove parity: same columns and dtypes on ft.load() and ft.bundle_table('data/sportec_bundles/J03WMX'), then run scripts/diagnostics_round1.py and report every FLAG."
+## Final input layer (Priyam) — implemented, pending BAR-ATH parity run
+`src/features/model_inputs.py` preserves Kalhan's four PR 2 flat schemas and adds the dead-ball block to the ball-aware
+schemas. `src/features/classification_inputs.py` consolidates that view with anonymous player-set and ball trajectories
+for TCN/set models. Schemas 03/04 accept anonymous slots because their player-around-ball fields require them. Schema
+04 uses generated `gtag_*`, never Metrica `tag_*`. Read `docs/model-inputs/RESEARCH_REVIEW.md` and `DECISION_LOG.md`,
+then run `python scripts/validate_model_inputs.py` before training. The Sportec gate passes; BAR-ATH column/dtype
+parity still requires the local BAR-ATH raw bundle.
 
 ## Ball evidence (Priyam, pre-pivot)
 Read: `ball_visible`, `ball_x_m/ball_y_m`, `home_ball_dist_m/away_ball_dist_m`, `nearest_team`, `ball_margin_m` (confidence), `ball_home_adv_m`, optional fills via `ball_filled`. Cautions: nearest player is a defender-biased proxy (RISKS 1); margin <1 m is contested (17% of frames); ball speed from the ATD is unusable; jumps >40 m/s are tracker teleports; out-of-bounds ball is not D. Ball gaps are long, so do not interpolate.
