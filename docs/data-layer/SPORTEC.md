@@ -21,12 +21,16 @@ from src.features import frame_table as ft
 from src.features import classification_inputs
 from src.features import model_inputs
 
-table, slots = ft.bundle_table("data/sportec_bundles/J03WMX")   # same 70 columns as ft.load() on BAR-ATH
+match = "J03WMX"
+bundle = "data/sportec_bundles/" + match
+table, slots = ft.bundle_table(bundle)   # same 70 columns as ft.load() on BAR-ATH
+args = ft.bundle_args(bundle + "/tactical/" + match + "_tactical_atd.xml")
 policy = classification_inputs.InputPolicy(
     schema=model_inputs.SCHEMA_PHASE,
     temporal_mode=classification_inputs.TemporalMode.OFFLINE_ACAUSAL,
 )
-inputs = classification_inputs.make_classification_inputs(table, slots, (105.0, 68.0), policy, fps=25)
+inputs = classification_inputs.make_classification_inputs(
+    table, slots, args["pitch"], policy, fps=args["fps"])
 X = inputs.frame_features                  # flat 80-column view
 players, ball = inputs.players, inputs.ball  # structured trajectory views
 ```
