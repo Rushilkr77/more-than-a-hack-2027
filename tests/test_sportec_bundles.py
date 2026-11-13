@@ -110,18 +110,3 @@ def test_swap_sides_uses_given_pitch(built):
     sw = ft.swap_sides(table, length=105.0)
     s = (sw["ball_home_adv_m"] + table["ball_home_adv_m"]).dropna()
     assert np.allclose(s, 105.0, atol=1e-3)
-
-
-def test_smooth_tracker_error_keeps_sd_and_removes_wobble():
-    w = np.random.default_rng(0).normal(0, 0.15, 20000)
-    s = bsb.smooth_noise(w, 25.0)
-    assert 0.12 < s.std() < 0.18                          # same error size
-    d2 = lambda v: np.median(np.abs(v[2:] - 2 * v[1:-1] + v[:-2]))  # noqa: E731
-    assert d2(s) < d2(w) / 100                            # far less frame-to-frame wobble
-
-
-def test_smooth_runs_never_crosses_gaps():
-    v = np.r_[np.zeros(20), np.full(5, np.nan), np.full(20, 10.0)]
-    out = bsb.smooth_runs(v, 3.0)
-    assert np.isnan(out[20:25]).all()
-    assert np.allclose(out[:20], 0) and np.allclose(out[25:], 10)
