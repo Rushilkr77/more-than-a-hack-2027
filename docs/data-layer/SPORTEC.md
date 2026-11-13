@@ -181,15 +181,15 @@ Sportec matches BAR-ATH.
 | A2 | a column is a label proxy | max mutual information of any model column with H/A on live frames; flag > 0.6 bits | top is team width, 0.10–0.28 bits (real football: the team in possession spreads wide); `nearest_team` 0.07–0.13 |
 | A3 | gap placement tracks the label | hidden share per H/A/D vs overall; flag skew > 0.08 | ≤ 0.06. Gap bias was capped at 0.6 after J03WOY at 0.75 skewed (dead ball hidden less) |
 | A4 | clean ball used for any input | bundles hold only damaged data; no clean-ball file | by construction |
-| A6 | hidden frames score like visible ones | per-visibility team accuracy on predictions | after training |
+| A6 | hidden frames score like visible ones | per-visibility team accuracy on predictions | P2 round 1: visible 0.88–0.90, hidden 0.78–0.79, ok (`docs/models/P2.md`) |
 | B1 | speed unit / blanks | median speed, blank share vs BAR-ATH graded frames | 1.30–1.46 vs 1.41 m/s; 9–13% vs 8% |
 | B2 | tracklet structure | tracks per team p10 / max, shape_conf | p10 8–10 vs 9; conf 0.89–0.997 vs 0.913; max 14 vs 19 (BAR-ATH has bigger duplicate bursts: known gap). `B2_share_over_13` = how often BAR-ATH goes beyond the training range. **After training:** `B2_acc_ghost` vs `B2_acc_clean` (team accuracy on frames with >11 tracks for a team vs the rest); if ghost frames are >0.05 worse, raise `duplicate_prob` / ghost duration in `RANGES` and rebuild |
 | B3/B4 | pitch 105 vs 105.3, origin | each match uses its own pitch; `swap_sides(table, length=...)` | fixed |
 | B5 | constant model columns | variance on Sportec | none (tags, homography excluded) |
 | B7 | attack direction | team mean x at each kick-off vs `home_attacks_right` | ok all 7 |
 | B8 | ball visible / gap length | per match vs published | visible 0.50–0.63 vs 0.59; gap median 6–20 s |
-| C1 | label grain | spells and mean duration: raw, adjusted, predicted | see table above |
-| D1, D3, D7 | overfit to validate, damage dependence, smoother doing all the work | `--pred` / `--model-only` | after training |
+| C1 | label grain | spells and mean duration: raw, adjusted, predicted | P2 round 1: 251–278 predicted vs 314–315 true spells (slightly long) |
+| D1, D3, D7 | overfit to validate, damage dependence, smoother doing all the work | `--pred` / `--model-only` | P2 round 1: D7 model only 0.19–0.21 → smoothed 0.62–0.64 (the smoother does most of the work); D1 waits for the test run; D3 needs more matches. See `docs/models/P2.md` |
 | E1 | BAR-ATH's second-half wait before kickoff (2,934 graded frames, always D) has no Sportec equivalent, so the model never trained on it | `--bar-ath-pred <submission.csv>`: share of `pre_kickoff` frames predicted D; flag < 0.99 | at inference; if flagged, force D on `pre_kickoff` after the smoother (the evaluator's own rule) |
 
 ## Generated Smart Tagging (schema 04)
