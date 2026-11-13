@@ -154,7 +154,11 @@ BAR-ATH's own visibility mask is never read. Only organiser-published headline f
   0.5–2 m offset), 21–26 slots per team; if no slot is free the observation is lost.
 - **Speed blanks:** first 0.6–1.4 s of every tracklet (BAR-ATH: 92% blank in a tracklet's first second, a tracker
   warm-up), then 4–10% random.
-- Position noise σ 0.05–0.2 m; ball speed field kept on 5–15% of visible frames.
+- Position error σ 0.05–0.2 m, low-frequency (correlation 0.3–2 s) with 1–4 frame tracker output smoothing on positions
+  and speed; ball error σ 0.05–0.4 m correlated over 2–10 frames, ball paths smoothed 1–4 frames (`TRACKER_RANGES`).
+  Ball speed field kept on 5–15% of visible frames.
+- **Ball teleports** (added after P2 round 1): 0.3–2 per minute the ball jumps onto a random player for 1–5 frames
+  (own random stream). Jumps > 40 m/s: 0.17–0.38% of steps vs BAR-ATH 0.23% (before: 0.07–0.15%).
 
 ## Labels
 - **raw:** `D` where `BallStatus = 0`, else `H`/`A` from `BallPossession`. Trains the models.
