@@ -31,6 +31,7 @@ import xml.etree.ElementTree as ET
 import zlib
 
 import numpy as np
+from scipy.ndimage import gaussian_filter1d
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_DIR = os.path.join(ROOT, "data", "sportec")
@@ -56,6 +57,24 @@ RANGES = {
     "duplicate_prob": (0.02, 0.15),          # per tracklet: a ghost copy in another slot, 1-15 s
     "position_noise_m": (0.05, 0.20),
     "slots_per_team": (21, 26),
+}
+# Tracker ball teleports: the ball is briefly put on a (random) player for 1-5 frames, the jumps behind BAR-ATH's
+# 0.23% of > 40 m/s ball steps (bundles without them: 0.07-0.15%, the first P2 round). Own random stream (seed + 1), so the
+# rest of the damage stays byte-identical. Player and team are random: no label information.
+TELEPORTS_PER_MIN = (0.3, 2.0)
+TELEPORT_FRAMES = (1, 5)
+# Tracker error shape. A real tracker's position error drifts slowly and its output is smoothed; independent per-frame
+# noise makes every path shake (frame-to-frame wobble 100x a smoothed tracker). So: player error keeps its sd
+# (position_noise_m) but is low-frequency, ball error has its own sd and correlation, and tracks get light Gaussian
+# output smoothing (positions and speed; the ball per visible run). Ranges are wide and chosen from the mechanism,
+# not fitted to BAR-ATH; BAR-ATH is only checked to fall inside the spread of the 7 matches. Gap placement is not
+# touched. Own random stream (seed + 2), so the rest of the damage stays byte-identical.
+TRACKER_RANGES = {
+    "player_noise_corr_s": (0.3, 2.0),       # correlation time of player position error
+    "player_smooth_frames": (1.0, 4.0),      # Gaussian sigma of output smoothing
+    "ball_noise_m": (0.05, 0.40),
+    "ball_noise_corr_frames": (2.0, 10.0),
+    "ball_smooth_frames": (1.0, 4.0),
 }
 GAP_LOG_SIGMA = 1.0
 # Adjusted labels: a possession spell shorter than this with no control event (pass, shot, ball claiming) by that
@@ -217,13 +236,50 @@ def tracklets(rng, c, p):
             continue                                     # tracker ran out of slots: observation lost
         k_ = rng.choice(free)
         free_at[k_] = b + 1
-        x[a:b, k_] = c["x"][a:b, j] + off * np.cos(ang) + rng.normal(0, noise, b - a)
-        y[a:b, k_] = c["y"][a:b, j] + off * np.sin(ang) + rng.normal(0, noise, b - a)
-        sp = c["s"][a:b, j].copy()
+        nc, sm = p["player_noise_corr_s"] * FPS, p["player_smooth_frames"]
+        x[a:b, k_] = smooth_track(c["x"][a:b, j], sm) + off * np.cos(ang) + smooth_noise(rng.normal(0, noise, b - a), nc)
+        y[a:b, k_] = smooth_track(c["y"][a:b, j], sm) + off * np.sin(ang) + smooth_noise(rng.normal(0, noise, b - a), nc)
+        sp = smooth_track(c["s"][a:b, j], sm)
         sp[:warm] = np.nan
         sp[rng.random(b - a) < p["speed_nan_share"]] = np.nan
         s[a:b, k_] = sp
     return x, y, s, slot_team
+
+
+def smooth_noise(w, sigma_frames):
+    """Low-frequency version of white noise w with the same sd (Gaussian filter, rescaled)."""
+    if sigma_frames <= 0 or len(w) < 2:
+        return w
+    return gaussian_filter1d(w, sigma_frames, mode="nearest") * np.sqrt(2 * np.sqrt(np.pi) * sigma_frames)
+
+
+def smooth_track(v, sigma_frames):
+    """Tracker output smoothing inside one tracklet (never across a break)."""
+    return gaussian_filter1d(v, sigma_frames, mode="nearest") if sigma_frames > 0 and len(v) > 1 else v
+
+
+def smooth_runs(v, sigma_frames):
+    """smooth_track over each finite run of v; NaN stays NaN."""
+    out = v.copy()
+    f = np.r_[False, np.isfinite(v), False].astype(np.int8)
+    for a, b in zip(np.flatnonzero(np.diff(f) == 1), np.flatnonzero(np.diff(f) == -1)):
+        out[a:b] = smooth_track(v[a:b], sigma_frames)
+    return out
+
+
+def teleport(rng, bx, by, c):
+    """In place: short ball jumps onto a random visible player. Returns the drawn rate (per minute of visible ball)."""
+    rate = float(rng.uniform(*TELEPORTS_PER_MIN))
+    vis = np.flatnonzero(np.isfinite(bx))
+    for f in rng.choice(vis, size=rng.poisson(rate * len(vis) / (60 * FPS)), replace=False):
+        players = np.flatnonzero(np.isfinite(c["x"][f]))
+        if not len(players):
+            continue
+        j = rng.choice(players)
+        e = min(len(bx), f + int(rng.integers(TELEPORT_FRAMES[0], TELEPORT_FRAMES[1] + 1)))
+        seen = np.isfinite(bx[f:e])
+        bx[f:e][seen], by[f:e][seen] = c["x"][f:e, j][seen], c["y"][f:e, j][seen]
+    return rate
 
 
 def labels(c, control, min_frames):
@@ -324,14 +380,17 @@ def build(match):
     seed = seed_for(match)
     rng = np.random.default_rng(seed)
     p = {k: float(rng.uniform(*v)) for k, v in RANGES.items() if k != "slots_per_team"}
+    rng_t = np.random.default_rng(seed + 2)
+    p.update({k: float(rng_t.uniform(*v)) for k, v in TRACKER_RANGES.items()})
     hidden = ball_gaps(rng, c, p, length, width)
     x, y, s, slot_team = tracklets(rng, c, p)
     order = rng.permutation(len(slot_team))              # slot order carries no team block or identity
     x, y, s, slot_team = x[:, order], y[:, order], s[:, order], slot_team[order]
-    noise = p["position_noise_m"]
-    bx = np.where(hidden, np.nan, c["ball"]["x"] + rng.normal(0, noise, c["n"]))
-    by = np.where(hidden, np.nan, c["ball"]["y"] + rng.normal(0, noise, c["n"]))
+    bn, bc, bsm = p["ball_noise_m"], p["ball_noise_corr_frames"], p["ball_smooth_frames"]
+    bx = np.where(hidden, np.nan, smooth_runs(c["ball"]["x"], bsm) + smooth_noise(rng.normal(0, bn, c["n"]), bc))
+    by = np.where(hidden, np.nan, smooth_runs(c["ball"]["y"], bsm) + smooth_noise(rng.normal(0, bn, c["n"]), bc))
     bs = np.where(~hidden & (rng.random(c["n"]) < p["ball_speed_kept"]), c["ball"]["s"], np.nan)
+    p["teleports_per_min"] = teleport(np.random.default_rng(seed + 1), bx, by, c)
 
     folder = os.path.join(OUT_DIR, match, "tactical")
     os.makedirs(folder, exist_ok=True)
