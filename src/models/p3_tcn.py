@@ -25,6 +25,7 @@ class P3Config:
     fps: int
     past_frames: int
     future_frames: int
+    core_frames: int
     channels: Tuple[int, ...]
     kernel_size: int
     dilations: Tuple[int, ...]
@@ -63,6 +64,7 @@ def load_config(path: str = CONFIG_PATH) -> P3Config:
         fps=int(values["fps"]),
         past_frames=int(values["past_frames"]),
         future_frames=int(values["future_frames"]),
+        core_frames=int(values["core_frames"]),
         channels=tuple(values["channels"]),
         kernel_size=int(values["kernel_size"]),
         dilations=tuple(values["dilations"]),
@@ -186,6 +188,50 @@ def target_windows(
     return windows
 
 
+def period_core_starts(periods: np.ndarray, core_frames: int) -> Tuple[int, ...]:
+    """Return contiguous core starts without allowing a core to span a period."""
+    periods = np.asarray(periods)
+    if periods.ndim != 1 or core_frames <= 0:
+        raise ValueError("P3 chunks need one period per frame and a positive core size")
+    edges = np.flatnonzero(periods[1:] != periods[:-1]) + 1
+    starts = np.r_[0, edges]
+    ends = np.r_[edges, len(periods)]
+    return tuple(
+        core_start
+        for start, end in zip(starts, ends)
+        for core_start in range(int(start), int(end), core_frames)
+    )
+
+
+def period_chunk(
+    values: np.ndarray,
+    periods: np.ndarray,
+    core_start: int,
+    past_frames: Optional[int] = None,
+    future_frames: Optional[int] = None,
+    core_frames: Optional[int] = None,
+) -> Tuple[np.ndarray, int]:
+    """Build one fixed-size dense core with only same-period context padding."""
+    values = np.asarray(values, dtype=np.float32)
+    periods = np.asarray(periods)
+    if values.ndim != 2 or periods.shape != (len(values),):
+        raise ValueError("P3 chunks need values [frames, features] and one period per frame")
+    if core_start < 0 or core_start >= len(values):
+        raise ValueError("P3 core start must be a valid frame position")
+    config = load_config()
+    past = config.past_frames if past_frames is None else past_frames
+    future = config.future_frames if future_frames is None else future_frames
+    core = config.core_frames if core_frames is None else core_frames
+    edges = np.flatnonzero(periods[1:] != periods[:-1]) + 1
+    starts = np.r_[0, edges]
+    ends = np.r_[edges, len(values)]
+    run = np.searchsorted(ends, core_start, side="right")
+    start, end = starts[run], ends[run]
+    positions = np.arange(core_start - past, core_start + core + future)
+    positions = np.clip(positions, start, end - 1)
+    return values[positions].T, int(min(core, end - core_start))
+
+
 class P3Model(torch.nn.Module):
     """Thin task wrapper around the maintained pytorch-tcn implementation."""
 
@@ -221,6 +267,15 @@ def target_logits(logits: torch.Tensor) -> torch.Tensor:
     if logits.ndim != 3:
         raise ValueError("P3 logits must have shape [batch, classes, frames]")
     return logits[:, :, -1]
+
+
+def target_chunk_logits(logits: torch.Tensor, config: P3Config) -> torch.Tensor:
+    """Select dense target outputs after their configured future look-ahead."""
+    start = config.past_frames + config.future_frames
+    stop = start + config.core_frames
+    if logits.ndim != 3 or logits.shape[2] < stop:
+        raise ValueError("P3 chunk logits do not cover the configured core frames")
+    return logits[:, :, start:stop]
 
 
 def save_artifact(

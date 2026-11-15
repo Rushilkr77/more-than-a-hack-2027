@@ -42,23 +42,29 @@ def _label_codes(labels, config):
         raise ValueError("unexpected P3 label {!r}".format(error.args[0])) from error
 
 
-class _WindowDataset(Dataset):
+class _ChunkDataset(Dataset):
     def __init__(self, sequences, config):
         self.config = config
         self.sequences = sequences
-        self.starts = np.cumsum([0] + [len(labels) for _, _, labels in sequences])
+        self.descriptors = [
+            (sequence, core_start)
+            for sequence, (_, periods, _) in enumerate(sequences)
+            for core_start in p3_tcn.period_core_starts(periods, config.core_frames)
+        ]
 
     def __len__(self):
-        return int(self.starts[-1])
+        return len(self.descriptors)
 
     def __getitem__(self, index):
-        sequence = int(np.searchsorted(self.starts, index, side="right") - 1)
+        sequence, core_start = self.descriptors[index]
         values, periods, labels = self.sequences[sequence]
-        target = index - self.starts[sequence]
-        window = p3_tcn.target_windows(
-            values, periods, [target], self.config.past_frames, self.config.future_frames
-        )[0]
-        return torch.from_numpy(window), int(labels[target])
+        window, valid_targets = p3_tcn.period_chunk(
+            values, periods, core_start, self.config.past_frames,
+            self.config.future_frames, self.config.core_frames,
+        )
+        target_labels = np.full(self.config.core_frames, -100, dtype=np.int64)
+        target_labels[:valid_targets] = labels[core_start:core_start + valid_targets]
+        return torch.from_numpy(window), torch.from_numpy(target_labels)
 
 
 def _device():
@@ -71,16 +77,18 @@ def _device():
 
 def _probabilities(model, values, periods, config, device):
     model.eval()
-    rows = []
+    rows = np.empty((len(values), len(config.classes)), dtype=np.float32)
     with torch.no_grad():
-        for start in range(0, len(values), config.batch_size):
-            targets = np.arange(start, min(start + config.batch_size, len(values)))
-            windows = p3_tcn.target_windows(
-                values, periods, targets, config.past_frames, config.future_frames
+        for core_start in p3_tcn.period_core_starts(periods, config.core_frames):
+            window, valid_targets = p3_tcn.period_chunk(
+                values, periods, core_start, config.past_frames,
+                config.future_frames, config.core_frames,
             )
-            logits = p3_tcn.target_logits(model(torch.from_numpy(windows).to(device)))
-            rows.append(torch.softmax(logits, dim=1).cpu().numpy())
-    return np.concatenate(rows)
+            logits = p3_tcn.target_chunk_logits(
+                model(torch.from_numpy(window[None, ...]).to(device)), config
+            )
+            rows[core_start:core_start + valid_targets] = torch.softmax(logits, dim=1)[0, :, :valid_targets].T.cpu().numpy()
+    return rows
 
 
 def _mean_metrics(probabilities, data, config, penalty=None):
@@ -115,19 +123,23 @@ def _train_schema(schema, config, split, data, device):
         validation[name] = (scaler.transform(values), periods)
         validation_sequences.append((validation[name][0], periods, _label_codes(data[name].labels["raw"], config)))
 
-    train_loader = DataLoader(_WindowDataset(train_sequences, config), batch_size=config.batch_size, shuffle=True)
-    validation_loader = DataLoader(_WindowDataset(validation_sequences, config), batch_size=config.batch_size)
+    train_loader = DataLoader(_ChunkDataset(train_sequences, config), batch_size=config.batch_size, shuffle=True)
+    validation_loader = DataLoader(_ChunkDataset(validation_sequences, config), batch_size=config.batch_size)
     counts = np.bincount(np.concatenate([labels for _, _, labels in train_sequences]), minlength=len(config.classes))
     weights = counts.sum() / (len(config.classes) * counts)
-    loss_fn = torch.nn.CrossEntropyLoss(weight=torch.tensor(weights, dtype=torch.float32, device=device))
+    loss_fn = torch.nn.CrossEntropyLoss(
+        weight=torch.tensor(weights, dtype=torch.float32, device=device), ignore_index=-100,
+    )
     model = p3_tcn.P3Model(config, schema).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
     log_event(
         "schema_training_started",
         schema=schema,
         device=str(device),
-        train_frames=len(train_loader.dataset),
-        validation_frames=len(validation_loader.dataset),
+        train_targets=sum(len(labels) for _, _, labels in train_sequences),
+        validation_targets=sum(len(labels) for _, _, labels in validation_sequences),
+        train_chunks=len(train_loader.dataset),
+        validation_chunks=len(validation_loader.dataset),
         epochs=config.max_epochs,
         batch_size=config.batch_size,
     )
@@ -141,19 +153,24 @@ def _train_schema(schema, config, split, data, device):
         train_rows = 0
         for windows, labels in train_loader:
             optimizer.zero_grad()
-            logits = p3_tcn.target_logits(model(windows.to(device)))
+            logits = p3_tcn.target_chunk_logits(model(windows.to(device)), config)
             loss = loss_fn(logits, labels.to(device))
             loss.backward()
             optimizer.step()
-            train_loss_total += float(loss.detach().cpu()) * len(labels)
-            train_rows += len(labels)
+            valid_rows = int((labels != -100).sum())
+            train_loss_total += float(loss.detach().cpu()) * valid_rows
+            train_rows += valid_rows
         model.eval()
-        losses = []
+        validation_loss_total = 0.0
+        validation_rows = 0
         with torch.no_grad():
             for windows, labels in validation_loader:
-                logits = p3_tcn.target_logits(model(windows.to(device)))
-                losses.append(float(loss_fn(logits, labels.to(device)).cpu()))
-        validation_loss = float(np.mean(losses))
+                logits = p3_tcn.target_chunk_logits(model(windows.to(device)), config)
+                loss = loss_fn(logits, labels.to(device))
+                valid_rows = int((labels != -100).sum())
+                validation_loss_total += float(loss.cpu()) * valid_rows
+                validation_rows += valid_rows
+        validation_loss = validation_loss_total / validation_rows
         if validation_loss < best_loss:
             best_loss = validation_loss
             best_state = copy.deepcopy(model.state_dict())

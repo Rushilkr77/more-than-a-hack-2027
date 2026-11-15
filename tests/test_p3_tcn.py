@@ -17,6 +17,7 @@ def test_p3_config_locks_the_approved_offline_window():
     assert config.past_frames == 75
     assert config.future_frames == 25
     assert config.window_frames == 101
+    assert config.core_frames == 256
     assert config.causal is True
     assert config.dilations == (1, 2, 4, 8, 10)
     assert config.receptive_field == 101
@@ -59,6 +60,19 @@ def test_target_window_never_reads_across_a_period_boundary():
     windows = p3_tcn.target_windows(frames, periods, np.array([4]), past_frames=2, future_frames=1)
 
     assert windows[0, 0].tolist() == [4.0, 4.0, 4.0, 5.0]
+
+
+def test_period_chunk_produces_many_aligned_targets_without_crossing_a_period():
+    frames = np.arange(8, dtype=np.float32)[:, None]
+    periods = np.array([1, 1, 1, 1, 2, 2, 2, 2], dtype=np.int8)
+
+    window, valid_targets = p3_tcn.period_chunk(
+        frames, periods, core_start=4, past_frames=2, future_frames=1, core_frames=3
+    )
+
+    assert valid_targets == 3
+    assert window.shape == (1, 6)
+    assert window[0].tolist() == [4.0, 4.0, 4.0, 5.0, 6.0, 7.0]
 
 
 def test_packaged_tcn_emits_three_logits_for_the_target_frame():

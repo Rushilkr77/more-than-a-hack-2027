@@ -4,6 +4,7 @@
   "fps": 25,
   "past_frames": 75,
   "future_frames": 25,
+  "core_frames": 256,
   "channels": [64, 64, 64, 64, 64],
   "kernel_size": 3,
   "dilations": [1, 2, 4, 8, 10],

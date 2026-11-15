@@ -7,8 +7,8 @@ Sportec train bundles + raw labels
   -> shared classification-input builder
   -> exact schema 03 OR exact schema 04
   -> train-only standardisation, no extra input channels
-  -> 101-frame period-safe target windows (3s past, target, 1s future)
-  -> causal pytorch-tcn -> final output aligned to target frame
+  -> 256-target dense chunks with 75 past and 25 future context frames
+  -> causal pytorch-tcn -> outputs 100–355 aligned to the target core
   -> weighted cross-entropy and validation-loss early stopping
 
 Sportec validation
