@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P2 and P3 results</title>
+<style>
+  :root { color-scheme: light dark; --bg: #101318; --surface: #181d25; --text: #eef2f7; --muted: #aab4c0; --line: #5a6778; --blue: #6cb6ff; --green: #4dd4ac; --orange: #f5a65b; --purple: #c8a2ff; }
+  @media (prefers-color-scheme: light) { :root { --bg: #f6f8fb; --surface: #fff; --text: #18212c; --muted: #536273; --line: #b7c2cf; --blue: #1769c2; --green: #087f5b; --orange: #ae5a00; --purple: #7546ba; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
+  main { max-width: 1080px; margin: auto; }
+  h1, h2 { margin: 0; }
+  h1 { font-size: 28px; }
+  h2 { font-size: 18px; margin-top: 28px; }
+  .sub { color: var(--muted); margin: 6px 0 0; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(220px, .9fr); gap: 20px; margin-top: 20px; }
+  .card { padding: 16px; background: var(--surface); border-radius: 12px; }
+  .stat { display: grid; gap: 2px; margin-bottom: 16px; }
+  .stat:last-child { margin-bottom: 0; }
+  .label { color: var(--muted); font-size: 13px; }
+  .value { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .chart { width: 100%; height: auto; display: block; }
+  .axis, .gridline { stroke: var(--line); stroke-width: 1; }
+  .gridline { opacity: .45; }
+  .curve { fill: none; stroke: var(--blue); stroke-width: 3; }
+  .point { fill: var(--blue); }
+  .best { fill: var(--green); }
+  .svgtext { fill: var(--muted); font-size: 12px; }
+  .svgstrong { fill: var(--text); font-size: 12px; font-weight: 650; }
+  .bars { display: grid; gap: 13px; margin-top: 12px; }
+  .barhead { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+  .track { height: 12px; background: color-mix(in srgb, var(--line) 28%, transparent); border-radius: 99px; overflow: hidden; }
+  .fill { height: 100%; border-radius: 99px; background: var(--blue); }
+  .raw { background: var(--orange); } .selected { background: var(--green); } .test { background: var(--purple); }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px; text-align: right; border-bottom: 1px solid color-mix(in srgb, var(--line) 35%, transparent); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 550; }
+  .note { margin-top: 20px; color: var(--muted); font-size: 13px; }
+  @media (max-width: 700px) { body { padding: 16px; } .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>P2 and P3 results</h1>
+  <p class="sub">Final local readout · all P3 runs use the exact 80-column schema-04 input</p>
+
+  <section class="grid" aria-label="Validation results">
+    <div class="card">
+      <h2 style="margin-top:0">Submission leader</h2>
+      <div class="stat"><span class="label">P2 Sportec validation</span><span class="value">0.671</span><span>smoothed spellF1 · penalty 20</span></div>
+      <div class="stat"><span class="label">Best P3 validation</span><span class="value">0.630</span><span>10 s past / 10 s future · coarse penalty 20</span></div>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Conclusion</h2>
+      <p class="sub">P2 remains the submission choice: it has the stronger spellF1 on both held-out Sportec and BAR-ATH. P3 improves frame-level macroF1 on BAR-ATH, but not possession-spell accuracy.</p>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:20px">
+    <h2 style="margin-top:0">P3 validation progression</h2>
+    <table>
+      <thead><tr><th>Run</th><th>Past / future</th><th>Penalty</th><th>SpellF1</th><th>MacroF1</th></tr></thead>
+      <tbody>
+        <tr><td>Original schema 04</td><td>3 s / 1 s</td><td>20</td><td>0.5943</td><td>0.8666</td></tr>
+        <tr><td>Long-context schema 04</td><td>8 s / 2.08 s</td><td>18, fine validation sweep</td><td>0.6283</td><td>0.8773</td></tr>
+        <tr><td>Long-context schema 04</td><td>10 s / 10 s</td><td>20, coarse validation sweep</td><td>0.6298</td><td>0.8782</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card" style="margin-top:20px">
+    <h2 style="margin-top:0">Held-out Sportec test — spellF1 / macroF1</h2>
+    <table>
+      <thead><tr><th>Run</th><th>Result</th><th>Predicted possessions</th><th>Ground truth</th></tr></thead>
+      <tbody>
+        <tr><td>P2 raw</td><td>0.345 / 0.899</td><td>—</td><td>294</td></tr>
+        <tr><td>P2 smoothed · penalty 20</td><td>0.662 / 0.904</td><td>—</td><td>294</td></tr>
+        <tr><td>P3 8 s / 2.08 s · penalty 18</td><td>0.641 / 0.879</td><td>299</td><td>294</td></tr>
+        <tr><td>P3 10 s / 10 s · penalty 20</td><td>0.647 / 0.879</td><td>277</td><td>294</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card" style="margin-top:20px">
+    <h2 style="margin-top:0">BAR-ATH public five minutes — spellF1 / macroF1</h2>
+    <table>
+      <thead><tr><th>Run</th><th>Result</th><th>Predicted possessions</th><th>Ground truth</th></tr></thead>
+      <tbody>
+        <tr><td>Baseline raw</td><td>0.039 / 0.597</td><td>—</td><td>17</td></tr>
+        <tr><td>Baseline smooth50</td><td>0.326 / 0.621</td><td>—</td><td>17</td></tr>
+        <tr><td>P2 raw</td><td>0.380 / 0.844</td><td>—</td><td>17</td></tr>
+        <tr><td>P2 smoothed · penalty 20</td><td>0.735 / 0.817</td><td>—</td><td>17</td></tr>
+        <tr><td>P3 8 s / 2.08 s · penalty 18</td><td>0.581 / 0.863</td><td>14</td><td>17</td></tr>
+        <tr><td>P3 10 s / 10 s · penalty 20</td><td>0.680 / 0.862</td><td>13</td><td>17</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <p class="note">Penalty 18 was selected only from the fine Sportec validation sweep for the 8 s / 2.08 s P3 model. Held-out Sportec and BAR-ATH public scores are report-only and do not alter model, context, or penalty selection.</p>
+</main>
+</body>
+</html>
+
