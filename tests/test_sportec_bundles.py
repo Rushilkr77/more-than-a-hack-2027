@@ -8,6 +8,9 @@ import pandas as pd
 import pytest
 
 from src.features import frame_table as ft
+from src.common import sportec
+from src.features import classification_inputs as ci
+from src.features import model_inputs as mi
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 spec = importlib.util.spec_from_file_location("bsb", os.path.join(ROOT, "scripts", "build_sportec_bundles.py"))
@@ -114,6 +117,53 @@ def test_swap_sides_uses_given_pitch(built):
     sw = ft.swap_sides(table, length=105.0)
     s = (sw["ball_home_adv_m"] + table["ball_home_adv_m"]).dropna()
     assert np.allclose(s, 105.0, atol=1e-3)
+
+
+def test_common_mirror_keeps_slot_geometry_and_swaps_teams(built):
+    table, slots = ft.bundle_table(str(built[0]))
+    labels = {
+        name: pd.read_csv(built[1] / "labels_{}.csv".format(name))["label"].to_numpy()
+        for name in ("raw", "adjusted")
+    }
+    match = sportec.MatchData(table, slots, labels, (105.0, 68.0), 25)
+
+    swapped = sportec.mirrored(match)
+
+    np.testing.assert_allclose(swapped.slots["x"], slots["x"], equal_nan=True)
+    np.testing.assert_allclose(swapped.slots["y"], slots["y"], equal_nan=True)
+    np.testing.assert_allclose(swapped.slots["s"], slots["s"], equal_nan=True)
+    np.testing.assert_array_equal(swapped.slots["team"], 1 - slots["team"])
+    assert (swapped.labels["raw"] == np.where(labels["raw"] == "H", "A", np.where(labels["raw"] == "A", "H", labels["raw"]))).all()
+    assert swapped.pitch == match.pitch and swapped.fps == match.fps
+
+    restored = sportec.mirrored(swapped)
+    pd.testing.assert_frame_equal(restored.table, match.table)
+    for name in slots:
+        np.testing.assert_allclose(restored.slots[name], slots[name], equal_nan=True)
+    for name in labels:
+        np.testing.assert_array_equal(restored.labels[name], labels[name])
+
+
+@pytest.mark.parametrize("schema", (mi.SCHEMA_BALL, mi.SCHEMA_PHASE))
+def test_common_mirror_keeps_slot_derived_features_team_consistent(built, schema):
+    table, slots = ft.bundle_table(str(built[0]))
+    labels = {
+        name: pd.read_csv(built[1] / "labels_{}.csv".format(name))["label"].to_numpy()
+        for name in ("raw", "adjusted")
+    }
+    match = sportec.MatchData(table, slots, labels, (105.0, 68.0), 25)
+    policy = ci.InputPolicy(schema=schema, temporal_mode=ci.TemporalMode.OFFLINE_ACAUSAL)
+
+    original = sportec.classification_inputs(match, policy).frame_features
+    swapped = sportec.classification_inputs(sportec.mirrored(match), policy).frame_features
+
+    for field in ("tracks_ahead_ball_count", "tracks_behind_ball_count", "local_support_count_5m", "compactness_behind_ball_m"):
+        np.testing.assert_allclose(
+            swapped["home_" + field], original["away_" + field], equal_nan=True,
+        )
+        np.testing.assert_allclose(
+            swapped["away_" + field], original["home_" + field], equal_nan=True,
+        )
 
 
 def test_smooth_tracker_error_keeps_sd_and_removes_wobble():

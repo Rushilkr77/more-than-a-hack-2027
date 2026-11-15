@@ -1,14 +1,14 @@
 # Common layer for P2–P5
 
 Every approach is compared on the same inputs, split, smoother and scorer, so the ranking reflects the models and not
-the plumbing. Everything here is shared; a model branch should only add its own model, inputs and training.
+the plumbing. Everything here is shared; a model branch should only add its own architecture and training.
 
 ## What is shared
 | piece | where | rule |
 |---|---|---|
 | Training data | `scripts/build_sportec_bundles.py` → `data/sportec_bundles`, `data/sportec_labels` | Same damaged bundles for all (fixed seeds). Damage is described in `docs/data-layer/SPORTEC.md`. Rebuild after pulling if it changed. |
 | Split | `configs/sportec_split.json` | 4 train / 2 validate / 1 test. The test match is never loaded by training code. |
-| Loading, mirroring | `src/common/sportec.py` `load`, `mirrored` | `labels_raw` trains; `labels_adjusted` tunes and scores. Train on a home/away-mirrored copy. |
+| Loading, mirroring | `src/common/sportec.py` `load`, `mirrored` | `load` returns the complete `MatchData` tracking contract. `labels_raw` trains; `labels_adjusted` tunes and scores. Train on a home/away-mirrored `MatchData` copy. |
 | Smoother | `src/decoder/viterbi.py` `smooth` | 3-state Viterbi over P(H), P(A), P(D), one switch penalty, never crosses halftime. |
 | Penalty tuning | `src/common/sportec.py` `tune_penalty`, grid `PENALTIES` | Penalty (in nats, cost of one label change) picked by mean validation spellF1 against `labels_adjusted`. Never tuned on BAR-ATH. |
 | Scorer | `src/common/sportec.py` `score` (wraps `evaluation/possession_metrics.py`) | spellF1 is the headline, macroF1 the tie-break. |
@@ -29,6 +29,30 @@ measured in nats (natural-log units): a penalty of 20 asks for strong, sustained
 label flips. 0 is plain argmax; larger gives fewer, longer spells. Optional extras on `smooth` (separate H↔A and
 live↔D penalties, minimum spell length) default off. They tied the single penalty in P2 (`docs/models/P2.md`), so the
 default stays one penalty.
+
+## Model inputs
+
+`sportec.load(match)` returns `MatchData`: the frame table, all anonymous slot arrays, separate raw/adjusted labels,
+the full `(length, width)` pitch, and FPS. P3-and-later branches must not reload bundles or construct slots themselves.
+
+Select an existing `InputPolicy` before fitting, then build inputs through the common entry point:
+
+```python
+from src.common import sportec
+from src.features import classification_inputs as ci
+from src.features import model_inputs as mi
+
+match = sportec.load(match_id)
+policy = ci.InputPolicy(schema=mi.SCHEMA_BALL, temporal_mode=ci.TemporalMode.OFFLINE_ACAUSAL)
+inputs = sportec.classification_inputs(match, policy)
+```
+
+Flat approaches consume `inputs.frame_features`; structured approaches consume `inputs.players` and `inputs.ball`;
+hybrid approaches consume both. The input layer, not a model branch, enforces the selected schema allow-list and
+temporal policy. Labels are intentionally not passed to the input builder.
+
+For training augmentation call `sportec.mirrored(match)`. It swaps Home/Away labels and slot team codes together with
+the frame table while preserving raw slot coordinates, matching `ft.swap_sides`' team-swap semantics.
 
 ## Do not
 - change the split, damage ranges, labels or scorer inside a model PR;
