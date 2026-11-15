@@ -15,6 +15,8 @@ the common-smoother number as the headline so approaches stay comparable. See do
 
 import json
 import os
+from dataclasses import dataclass
+from typing import Mapping, Tuple
 
 import numpy as np
 import pandas as pd
@@ -24,6 +26,7 @@ from src.decoder import majority
 from src.decoder.viterbi import smooth
 from src.evidence import ball_nearest
 from src.features import frame_table as ft
+from src.features import classification_inputs as ci
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BUNDLES = os.path.join(ROOT, "data", "sportec_bundles")
@@ -32,24 +35,55 @@ PENALTIES = (0, 2, 5, 10, 20, 40, 80, 160)     # the common smoother-penalty gri
 BASELINE_WINDOW = 50                           # official smooth50, fixed
 
 
+@dataclass(frozen=True)
+class MatchData:
+    """Complete tracking and supervision contract for one Sportec match."""
+
+    table: pd.DataFrame
+    slots: Mapping[str, np.ndarray]
+    labels: Mapping[str, np.ndarray]
+    pitch: Tuple[float, float]
+    fps: int
+
+
 def split():
     with open(os.path.join(ROOT, "configs", "sportec_split.json")) as f:
         return json.load(f)                    # keys: train, validate, test
 
 
 def load(match):
-    """(frame table, {"raw": labels, "adjusted": labels}, pitch length m). raw trains, adjusted tunes and scores."""
-    table, _ = ft.bundle_table(os.path.join(BUNDLES, match))
-    length = ft.bundle_args(os.path.join(BUNDLES, match, "tactical", match + "_tactical_atd.xml"))["pitch"][0]
+    """Load the complete tracking contract; raw labels train, adjusted labels tune and score."""
+    bundle = os.path.join(BUNDLES, match)
+    table, slots = ft.bundle_table(bundle)
+    args = ft.bundle_args(os.path.join(bundle, "tactical", match + "_tactical_atd.xml"))
     lab = {k: pd.read_csv(os.path.join(LABELS, match, "labels_{}.csv".format(k)))["label"].to_numpy()
            for k in ("raw", "adjusted")}
-    return table, lab, length
+    return MatchData(table=table, slots=slots, labels=lab, pitch=args["pitch"], fps=args["fps"])
 
 
-def mirrored(table, labels, length):
-    """Home/away swapped copy for augmentation: features from ft.swap_sides, H and A labels exchanged."""
-    swapped = np.where(labels == "H", "A", np.where(labels == "A", "H", labels))
-    return ft.swap_sides(table, length=length), swapped
+def classification_inputs(match: MatchData, policy: ci.InputPolicy) -> ci.ClassificationInputs:
+    """Build the selected leak-safe flat and structured inputs from one common match contract."""
+    return ci.make_classification_inputs(
+        match.table, match.slots, match.pitch, policy, fps=match.fps,
+    )
+
+
+def _swap_labels(labels):
+    return np.where(labels == "H", "A", np.where(labels == "A", "H", labels))
+
+
+def mirrored(match: MatchData) -> MatchData:
+    """Home/away-swapped training copy with table, slots, and labels kept aligned."""
+    slots = {name: values.copy() for name, values in match.slots.items()}
+    slots["team"] = (1 - slots["team"]).astype(match.slots["team"].dtype)
+    labels = {name: _swap_labels(values) for name, values in match.labels.items()}
+    return MatchData(
+        table=ft.swap_sides(match.table, length=match.pitch[0]),
+        slots=slots,
+        labels=labels,
+        pitch=match.pitch,
+        fps=match.fps,
+    )
 
 
 def score(gt_labels, pred_labels):
@@ -65,8 +99,8 @@ def score(gt_labels, pred_labels):
 def tune_penalty(proba, data, penalties=PENALTIES):
     """Pick the smoother's switch penalty by mean spellF1 on the validation matches (labels_adjusted).
 
-    proba / data: {match: [frames, 3] P(H), P(A), P(D)} / {match: (table, labels, length)}. Returns (best, curve)."""
-    curve = {lam: float(np.mean([score(data[m][1]["adjusted"], smooth(proba[m], data[m][0]["period"], lam))["spellF1"]
+    proba / data: {match: [frames, 3] P(H), P(A), P(D)} / {match: MatchData}. Returns (best, curve)."""
+    curve = {lam: float(np.mean([score(data[m].labels["adjusted"], smooth(proba[m], data[m].table["period"], lam))["spellF1"]
                                  for m in proba])) for lam in penalties}
     return max(curve, key=curve.get), curve
 

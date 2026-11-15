@@ -17,20 +17,17 @@ python scripts/diagnostics_round1.py        # risk-register markers with a FLAG 
 python scripts/validate_model_inputs.py     # schemas, split/label alignment, leakage and parity gate
 ```
 ```python
-from src.features import frame_table as ft
-from src.features import classification_inputs
-from src.features import model_inputs
+from src.common import sportec
+from src.features import classification_inputs as ci
+from src.features import model_inputs as mi
 
 match = "J03WMX"
-bundle = "data/sportec_bundles/" + match
-table, slots = ft.bundle_table(bundle)   # same 70 columns as ft.load() on BAR-ATH
-args = ft.bundle_args(bundle + "/tactical/" + match + "_tactical_atd.xml")
-policy = classification_inputs.InputPolicy(
-    schema=model_inputs.SCHEMA_PHASE,
-    temporal_mode=classification_inputs.TemporalMode.OFFLINE_ACAUSAL,
+match_data = sportec.load(match)
+policy = ci.InputPolicy(
+    schema=mi.SCHEMA_PHASE,
+    temporal_mode=ci.TemporalMode.OFFLINE_ACAUSAL,
 )
-inputs = classification_inputs.make_classification_inputs(
-    table, slots, args["pitch"], policy, fps=args["fps"])
+inputs = sportec.classification_inputs(match_data, policy)
 X = inputs.frame_features                  # flat 80-column view
 players, ball = inputs.players, inputs.ball  # structured trajectory views
 ```
@@ -43,28 +40,27 @@ frame-table columns alone. The evidence and trade-offs are recorded in `docs/mod
 
 ```python
 import json
-from src.features import frame_table as ft
-from src.features import classification_inputs
-from src.features import model_inputs
+from src.common import sportec
+from src.features import classification_inputs as ci
+from src.features import model_inputs as mi
 
 split = json.load(open("configs/sportec_split.json"))
-policy = classification_inputs.InputPolicy(
-    schema=model_inputs.SCHEMA_PHASE,
-    temporal_mode=classification_inputs.TemporalMode.OFFLINE_ACAUSAL,
+policy = ci.InputPolicy(
+    schema=mi.SCHEMA_PHASE,
+    temporal_mode=ci.TemporalMode.OFFLINE_ACAUSAL,
 )
 for m in split["train"]:
-    table, slots = ft.bundle_table("data/sportec_bundles/" + m)
-    args = ft.bundle_args("data/sportec_bundles/{0}/tactical/{0}_tactical_atd.xml".format(m))
-    inputs = classification_inputs.make_classification_inputs(
-        table, slots, args["pitch"], policy, fps=args["fps"])
+    match_data = sportec.load(m)
+    inputs = sportec.classification_inputs(match_data, policy)
     X = inputs.frame_features
-    y = pd.read_csv("data/sportec_labels/{}/labels_raw.csv".format(m))["label"]   # the TRAINING LOOP reads labels, not make_inputs
-# inference uses the same call with ft.load(), ft.load_slots(), and BAR-ATH pitch/fps
+    y = match_data.labels["raw"]   # the TRAINING LOOP reads labels, not classification_inputs
+# BAR-ATH inference passes its matching tracking contract to the same input builder.
 ```
 
 Rules, each tied to a risk-register row:
 1. **Same function, both datasets.** No `if sportec:` branches and no BAR-ATH paths, `GAMES` constants or team names
-   inside `make_inputs`. Pitch is an argument (B3/B4); for mirroring call `ft.swap_sides(table, length=pitch[0])`.
+   inside input construction. Pitch is part of the tracking contract (B3/B4); for training mirroring call
+   `sportec.mirrored(match_data)`, never `ft.swap_sides` on a table by itself.
 2. **Explicit allow-lists.** Each schema selects only its declared columns. This keeps our generated tags (`gtag_*`)
    in schema 04 and drops Metrica's `tag_*`, `hom_*`, `graded`, `pre_kickoff`, `frame`, labels and damage metadata.
    Future frame-table columns cannot silently become model inputs.
@@ -85,11 +81,11 @@ Rules, each tied to a risk-register row:
 
 ## From bundle to P2–P5: the end-to-end flow
 ```
-data/sportec_bundles/<M>  ──ft.bundle_table──►  frame table (70 cols, 1 row / frame)
+data/sportec_bundles/<M>  ──sportec.load──►  MatchData: frame table + slots + pitch + FPS
                                                     │
-                     make_inputs(table, pitch, schema, slots, fps)  ← same call on BAR-ATH
+                     sportec.classification_inputs(match_data, policy)  ← same builder on BAR-ATH
                                                     ▼
-                      X: 20 / 32 / 60 / 80 columns by schema; NaN and quality flags kept
+                      flat X plus structured player/ball views; NaN and quality flags kept
                                                     │
                   ┌──────────────────┬──────────────┴─────┬───────────────────┐
                   ▼                  ▼                    ▼                   ▼
@@ -103,8 +99,9 @@ data/sportec_bundles/<M>  ──ft.bundle_table──►  frame table (70 cols, 
                               frame,label  →  spellF1 / macroF1
 ```
 
-**Step 1. Build inputs (one function, every approach reads its output).** `make_inputs(...)` returns `X` with one
-row per frame. `frame_id` is the DataFrame index for alignment, not a trainable feature. It contains:
+**Step 1. Build inputs (one function, every approach reads its output).**
+`sportec.classification_inputs(match_data, policy)` returns the selected flat `X` and structured player/ball views.
+`frame_id` is the DataFrame index for alignment, not a trainable feature. The flat view contains:
 
 | block | source | examples |
 |---|---|---|
@@ -128,7 +125,7 @@ Out of `X`: Metrica's Smart Tagging (`tag_*`, smoother only), homography, raw sl
 | NaN | native (XGBoost learns a branch for missing) | fill 0 **plus** a 0/1 missing mask channel per block | same as P3 | same as P3, plus an attention mask |
 | scaling | none needed | mean/std from the **train** matches only, frozen and reused on BAR-ATH | same | same |
 | windows | never across a `period` change | pad at half edges, never join halves | same | same |
-| mirror augmentation | optional `ft.swap_sides(table, length=pitch[0])` with H↔A swapped in `y` | same | same | same |
+| mirror augmentation | optional `sportec.mirrored(match_data)` | same | same | same |
 
 All four output P(H), P(A), P(D) per frame plus a confidence. Nothing from BAR-ATH is used to fit or scale.
 
