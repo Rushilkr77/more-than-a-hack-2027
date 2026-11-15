@@ -43,6 +43,7 @@ class P3Config:
     batch_size: int
     max_epochs: int
     early_stopping_patience: int
+    output_dir: str
     seed: int
 
     @property
@@ -82,6 +83,7 @@ def load_config(path: str = CONFIG_PATH) -> P3Config:
         batch_size=int(values["batch_size"]),
         max_epochs=int(values["max_epochs"]),
         early_stopping_patience=int(values["early_stopping_patience"]),
+        output_dir=values["output_dir"],
         seed=int(values["seed"]),
     )
     if config.schemas != (mi.SCHEMA_BALL, mi.SCHEMA_PHASE):

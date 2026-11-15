@@ -17,9 +17,6 @@ from src.common import sportec
 from src.models import p3_tcn
 
 
-OUT = os.path.join(ROOT, "outputs", "p3")
-
-
 def log_event(event, **details):
     """Emit one flushed JSON progress record for a long-running training job."""
     print(json.dumps({"event": event, **details}), flush=True)
@@ -102,7 +99,7 @@ def _mean_metrics(probabilities, data, config, penalty=None):
     return {key: float(np.mean([row[key] for row in rows])) for key in rows[0]}
 
 
-def _train_schema(schema, config, split, data, device):
+def _train_schema(schema, config, split, data, device, output_dir):
     log_event("schema_preparation_started", schema=schema)
     train_sequences = []
     train_values = []
@@ -201,7 +198,7 @@ def _train_schema(schema, config, split, data, device):
     penalty, curve = sportec.tune_penalty(probabilities, {name: data[name] for name in split["validate"]})
     raw = _mean_metrics(probabilities, data, config)
     smoothed = _mean_metrics(probabilities, data, config, penalty)
-    directory = os.path.join(OUT, "schema_" + schema[:2])
+    directory = os.path.join(output_dir, "schema_" + schema[:2])
     p3_tcn.save_artifact(directory, model.cpu(), schema, scaler, penalty)
     for name, proba in probabilities.items():
         np.save(os.path.join(directory, name + "_validation_probabilities.npy"), proba)
@@ -235,18 +232,19 @@ def main():
     parser.add_argument("--config", default=p3_tcn.CONFIG_PATH)
     args = parser.parse_args()
     config = p3_tcn.load_config(args.config)
+    output_dir = os.path.join(ROOT, config.output_dir)
     torch.manual_seed(config.seed)
     split = sportec.split()
     schemas = schemas_to_run(config, args.schema)
     device = _device()
-    log_event("training_started", schemas=list(schemas), device=str(device), config=args.config)
+    log_event("training_started", schemas=list(schemas), device=str(device), config=args.config, output_dir=output_dir)
     log_event("sportec_loading_started", matches=split["train"] + split["validate"])
     data = {name: sportec.load(name) for name in split["train"] + split["validate"]}
     log_event("sportec_loading_finished", matches=list(data))
-    results = [_train_schema(schema, config, split, data, device) for schema in schemas]
+    results = [_train_schema(schema, config, split, data, device, output_dir) for schema in schemas]
     selected = p3_tcn.select_run([result for result in results])
-    os.makedirs(OUT, exist_ok=True)
-    with open(os.path.join(OUT, "selection.json"), "w") as file:
+    os.makedirs(output_dir, exist_ok=True)
+    with open(os.path.join(output_dir, "selection.json"), "w") as file:
         json.dump(selected, file, indent=2)
     log_event("training_finished", selected_schema=selected["schema"], spellF1=selected["spellF1"], macroF1=selected["macroF1"])
     print(json.dumps(selected, indent=2), flush=True)

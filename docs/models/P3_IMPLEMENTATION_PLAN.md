@@ -7,8 +7,8 @@ Sportec train bundles + raw labels
   -> shared classification-input builder
   -> exact schema 03 OR exact schema 04
   -> train-only standardisation, no extra input channels
-  -> 256-target dense chunks with 75 past and 25 future context frames
-  -> causal pytorch-tcn -> outputs 100–355 aligned to the target core
+    -> 256-target dense chunks with 200 past and 52 future context frames
+    -> causal pytorch-tcn -> outputs 252–507 aligned to the target core
   -> weighted cross-entropy and validation-loss early stopping
 
 Sportec validation
@@ -40,4 +40,5 @@ Run:
 ```
 
 The final command trains schema 03 and 04 sequentially and writes ignored
-artifacts to `outputs/p3/selection.json` plus one directory per schema.
+long-context artifacts to `outputs/p3_long_context_253/selection.json` plus
+one directory per schema.

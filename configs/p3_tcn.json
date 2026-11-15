@@ -2,12 +2,12 @@
   "schemas": ["03_ball_shape_extended", "04_full_phase_context"],
   "classes": ["H", "A", "D"],
   "fps": 25,
-  "past_frames": 75,
-  "future_frames": 25,
+  "past_frames": 200,
+  "future_frames": 52,
   "core_frames": 256,
-  "channels": [64, 64, 64, 64, 64],
+  "channels": [64, 64, 64, 64, 64, 64],
   "kernel_size": 3,
-  "dilations": [1, 2, 4, 8, 10],
+  "dilations": [1, 2, 4, 8, 16, 32],
   "dropout": 0.1,
   "causal": true,
   "input_shape": "NCL",
@@ -22,5 +22,6 @@
   "batch_size": 16,
   "max_epochs": 30,
   "early_stopping_patience": 5,
+  "output_dir": "outputs/p3_long_context_253",
   "seed": 2027
 }

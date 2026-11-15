@@ -44,54 +44,60 @@
 <body>
 <main>
   <h1>P2 and P3 results</h1>
-  <p class="sub">Selected model: schema 04 · 3 seconds past / 1 second future · exact 80-column input schema</p>
+  <p class="sub">Final local readout · all P3 runs use the exact 80-column schema-04 input</p>
 
   <section class="grid" aria-label="Validation results">
     <div class="card">
-      <h2 style="margin-top:0">Selected P3 decoding</h2>
-      <p class="sub">Penalty 20 is the sole frozen decoding setting for P3.</p>
+      <h2 style="margin-top:0">Submission leader</h2>
+      <div class="stat"><span class="label">P2 Sportec validation</span><span class="value">0.671</span><span>smoothed spellF1 · penalty 20</span></div>
+      <div class="stat"><span class="label">Best P3 validation</span><span class="value">0.630</span><span>10 s past / 10 s future · coarse penalty 20</span></div>
     </div>
     <div class="card">
-      <div class="stat"><span class="label">Schema 03 validation</span><span class="value">0.5896</span><span>spellF1 at penalty 20</span></div>
-      <div class="stat"><span class="label">Schema 04 validation</span><span class="value">0.5943</span><span>spellF1 at penalty 20</span></div>
-      <div class="stat"><span class="label">BAR-ATH public check</span><span class="value">0.6303</span><span>spellF1 at frozen penalty 20</span></div>
+      <h2 style="margin-top:0">Conclusion</h2>
+      <p class="sub">P2 remains the submission choice: it has the stronger spellF1 on both held-out Sportec and BAR-ATH. P3 improves frame-level macroF1 on BAR-ATH, but not possession-spell accuracy.</p>
     </div>
   </section>
 
   <section class="card" style="margin-top:20px">
-    <h2 style="margin-top:0">Raw versus smoothed spellF1</h2>
-    <div class="bars">
-      <div><div class="barhead"><span>Schema 04 validation · raw</span><strong>0.2989</strong></div><div class="track"><div class="fill raw" style="width:29.89%"></div></div></div>
-      <div><div class="barhead"><span>Schema 04 validation · penalty 20</span><strong>0.5943</strong></div><div class="track"><div class="fill selected" style="width:59.43%"></div></div></div>
-      <div><div class="barhead"><span>Sportec test · raw</span><strong>0.3050</strong></div><div class="track"><div class="fill raw" style="width:30.50%"></div></div></div>
-      <div><div class="barhead"><span>Sportec test · penalty 20</span><strong>0.6352</strong></div><div class="track"><div class="fill selected" style="width:63.52%"></div></div></div>
-    </div>
-  </section>
-
-  <section class="card" style="margin-top:20px">
-    <h2 style="margin-top:0">Possession-spell counts</h2>
+    <h2 style="margin-top:0">P3 validation progression</h2>
     <table>
-      <thead><tr><th>Run</th><th>Predicted spells</th><th>True spells</th><th>Mean spell duration</th></tr></thead>
+      <thead><tr><th>Run</th><th>Past / future</th><th>Penalty</th><th>SpellF1</th><th>MacroF1</th></tr></thead>
       <tbody>
-        <tr><td>Schema 04 validation · raw</td><td>972.5</td><td>314.5</td><td>3.45 s</td></tr>
-        <tr><td>Schema 04 validation · penalty 20</td><td>276.0</td><td>314.5</td><td>12.18 s</td></tr>
-        <tr><td>Sportec test · raw</td><td>1,011</td><td>294</td><td>3.48 s</td></tr>
-        <tr><td>Sportec test · penalty 20</td><td>291</td><td>294</td><td>12.07 s</td></tr>
-        <tr><td>BAR-ATH public · penalty 20</td><td>16</td><td>17</td><td>16.31 s</td></tr>
+        <tr><td>Original schema 04</td><td>3 s / 1 s</td><td>20</td><td>0.5943</td><td>0.8666</td></tr>
+        <tr><td>Long-context schema 04</td><td>8 s / 2.08 s</td><td>18, fine validation sweep</td><td>0.6283</td><td>0.8773</td></tr>
+        <tr><td>Long-context schema 04</td><td>10 s / 10 s</td><td>20, coarse validation sweep</td><td>0.6298</td><td>0.8782</td></tr>
       </tbody>
     </table>
   </section>
 
   <section class="card" style="margin-top:20px">
-    <h2 style="margin-top:0">P2 raw versus smoothed spellF1</h2>
-    <div class="bars">
-      <div><div class="barhead"><span>Sportec validation · raw</span><strong>0.313</strong></div><div class="track"><div class="fill raw" style="width:31.3%"></div></div></div>
-      <div><div class="barhead"><span>Sportec validation · penalty 20</span><strong>0.671</strong></div><div class="track"><div class="fill selected" style="width:67.1%"></div></div></div>
-      <div><div class="barhead"><span>BAR-ATH public five minutes · raw</span><strong>0.288</strong></div><div class="track"><div class="fill raw" style="width:28.8%"></div></div></div>
-      <div><div class="barhead"><span>BAR-ATH public five minutes · penalty 20</span><strong>0.734</strong></div><div class="track"><div class="fill test" style="width:73.4%"></div></div></div>
-    </div>
+    <h2 style="margin-top:0">Held-out Sportec test — spellF1 / macroF1</h2>
+    <table>
+      <thead><tr><th>Run</th><th>Result</th><th>Predicted possessions</th><th>Ground truth</th></tr></thead>
+      <tbody>
+        <tr><td>P2 raw</td><td>0.345 / 0.899</td><td>—</td><td>294</td></tr>
+        <tr><td>P2 smoothed · penalty 20</td><td>0.662 / 0.904</td><td>—</td><td>294</td></tr>
+        <tr><td>P3 8 s / 2.08 s · penalty 18</td><td>0.641 / 0.879</td><td>299</td><td>294</td></tr>
+        <tr><td>P3 10 s / 10 s</td><td>Not yet evaluated</td><td>—</td><td>294</td></tr>
+      </tbody>
+    </table>
   </section>
-  <p class="note">Penalty 20 is frozen from the original validation sweep. Held-out Sportec and BAR-ATH public scores are reported as checks and are not used to tune the model.</p>
+
+  <section class="card" style="margin-top:20px">
+    <h2 style="margin-top:0">BAR-ATH public five minutes — spellF1 / macroF1</h2>
+    <table>
+      <thead><tr><th>Run</th><th>Result</th><th>Predicted possessions</th><th>Ground truth</th></tr></thead>
+      <tbody>
+        <tr><td>Baseline raw</td><td>0.039 / 0.597</td><td>—</td><td>17</td></tr>
+        <tr><td>Baseline smooth50</td><td>0.326 / 0.621</td><td>—</td><td>17</td></tr>
+        <tr><td>P2 raw</td><td>0.380 / 0.844</td><td>—</td><td>17</td></tr>
+        <tr><td>P2 smoothed · penalty 20</td><td>0.735 / 0.817</td><td>—</td><td>17</td></tr>
+        <tr><td>P3 8 s / 2.08 s · penalty 18</td><td>0.581 / 0.863</td><td>14</td><td>17</td></tr>
+        <tr><td>P3 10 s / 10 s</td><td>Not yet evaluated</td><td>—</td><td>17</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <p class="note">Penalty 18 was selected only from the fine Sportec validation sweep for the 8 s / 2.08 s P3 model. Held-out Sportec and BAR-ATH public scores are report-only and do not alter model, context, or penalty selection.</p>
 </main>
 </body>
 </html>

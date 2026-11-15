@@ -10,17 +10,18 @@ from tests.test_model_inputs import _slots, _table
 from scripts import train_p3
 
 
-def test_p3_config_locks_the_approved_offline_window():
+def test_p3_config_locks_the_approved_long_context_window():
     config = p3_tcn.load_config()
 
     assert config.schemas == (mi.SCHEMA_BALL, mi.SCHEMA_PHASE)
-    assert config.past_frames == 75
-    assert config.future_frames == 25
-    assert config.window_frames == 101
+    assert config.past_frames == 200
+    assert config.future_frames == 52
+    assert config.window_frames == 253
     assert config.core_frames == 256
     assert config.causal is True
-    assert config.dilations == (1, 2, 4, 8, 10)
-    assert config.receptive_field == 101
+    assert config.dilations == (1, 2, 4, 8, 16, 32)
+    assert config.receptive_field == 253
+    assert config.output_dir == "outputs/p3_long_context_253"
 
 
 def test_schema_columns_are_the_exact_supplied_allow_lists():
@@ -43,14 +44,14 @@ def test_train_only_scaler_centres_each_existing_column_and_imputes_missing_afte
     assert transformed[3, 0] == 0.0
 
 
-def test_target_window_uses_exactly_three_seconds_past_and_one_second_future():
-    frames = np.arange(200, dtype=np.float32)[:, None]
-    periods = np.ones(200, dtype=np.int8)
+def test_target_window_uses_exactly_eight_seconds_past_and_about_two_seconds_future():
+    frames = np.arange(400, dtype=np.float32)[:, None]
+    periods = np.ones(400, dtype=np.int8)
 
-    windows = p3_tcn.target_windows(frames, periods, np.array([75]))
+    windows = p3_tcn.target_windows(frames, periods, np.array([200]))
 
-    assert windows.shape == (1, 1, 101)
-    assert windows[0, 0].tolist() == list(range(101))
+    assert windows.shape == (1, 1, 253)
+    assert windows[0, 0].tolist() == list(range(253))
 
 
 def test_target_window_never_reads_across_a_period_boundary():

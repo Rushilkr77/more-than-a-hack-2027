@@ -1,0 +1,50 @@
+{
+  "schemas": [
+    "03_ball_shape_extended",
+    "04_full_phase_context"
+  ],
+  "classes": [
+    "H",
+    "A",
+    "D"
+  ],
+  "fps": 25,
+  "past_frames": 250,
+  "future_frames": 250,
+  "core_frames": 256,
+  "channels": [
+    64,
+    64,
+    64,
+    64,
+    64,
+    64,
+    64
+  ],
+  "kernel_size": 3,
+  "dilations": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32,
+    62
+  ],
+  "dropout": 0.1,
+  "causal": true,
+  "input_shape": "NCL",
+  "use_norm": "weight_norm",
+  "activation": "relu",
+  "kernel_initializer": "xavier_uniform",
+  "use_skip_connections": false,
+  "use_gate": false,
+  "output_activation": null,
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "batch_size": 16,
+  "max_epochs": 30,
+  "early_stopping_patience": 5,
+  "output_dir": "outputs/p3_10x10_501",
+  "seed": 2027
+}
