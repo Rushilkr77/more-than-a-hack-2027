@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P3 TCN results</title>
+<style>
+  :root { color-scheme: light dark; --bg: #101318; --surface: #181d25; --text: #eef2f7; --muted: #aab4c0; --line: #5a6778; --blue: #6cb6ff; --green: #4dd4ac; --orange: #f5a65b; --purple: #c8a2ff; }
+  @media (prefers-color-scheme: light) { :root { --bg: #f6f8fb; --surface: #fff; --text: #18212c; --muted: #536273; --line: #b7c2cf; --blue: #1769c2; --green: #087f5b; --orange: #ae5a00; --purple: #7546ba; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
+  main { max-width: 1080px; margin: auto; }
+  h1, h2 { margin: 0; }
+  h1 { font-size: 28px; }
+  h2 { font-size: 18px; margin-top: 28px; }
+  .sub { color: var(--muted); margin: 6px 0 0; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(220px, .9fr); gap: 20px; margin-top: 20px; }
+  .card { padding: 16px; background: var(--surface); border-radius: 12px; }
+  .stat { display: grid; gap: 2px; margin-bottom: 16px; }
+  .stat:last-child { margin-bottom: 0; }
+  .label { color: var(--muted); font-size: 13px; }
+  .value { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .chart { width: 100%; height: auto; display: block; }
+  .axis, .gridline { stroke: var(--line); stroke-width: 1; }
+  .gridline { opacity: .45; }
+  .curve { fill: none; stroke: var(--blue); stroke-width: 3; }
+  .point { fill: var(--blue); }
+  .best { fill: var(--green); }
+  .svgtext { fill: var(--muted); font-size: 12px; }
+  .svgstrong { fill: var(--text); font-size: 12px; font-weight: 650; }
+  .bars { display: grid; gap: 13px; margin-top: 12px; }
+  .barhead { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+  .track { height: 12px; background: color-mix(in srgb, var(--line) 28%, transparent); border-radius: 99px; overflow: hidden; }
+  .fill { height: 100%; border-radius: 99px; background: var(--blue); }
+  .raw { background: var(--orange); } .selected { background: var(--green); } .test { background: var(--purple); }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px; text-align: right; border-bottom: 1px solid color-mix(in srgb, var(--line) 35%, transparent); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 550; }
+  .note { margin-top: 20px; color: var(--muted); font-size: 13px; }
+  @media (max-width: 700px) { body { padding: 16px; } .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>P3 TCN results</h1>
+  <p class="sub">Selected model: schema 04 · 3 seconds past / 1 second future · exact 80-column input schema</p>
+
+  <section class="grid" aria-label="Validation results">
+    <div class="card">
+      <h2 style="margin-top:0">Schema 04 validation spellF1 by Viterbi penalty</h2>
+      <svg class="chart" viewBox="0 0 700 270" role="img" aria-label="Line chart showing validation spellF1 peaks at penalty 16">
+        <line class="axis" x1="60" y1="220" x2="660" y2="220"/>
+        <line class="axis" x1="60" y1="40" x2="60" y2="220"/>
+        <line class="gridline" x1="60" y1="175" x2="660" y2="175"/><line class="gridline" x1="60" y1="130" x2="660" y2="130"/><line class="gridline" x1="60" y1="85" x2="660" y2="85"/><line class="gridline" x1="60" y1="40" x2="660" y2="40"/>
+        <text class="svgtext" x="52" y="224" text-anchor="end">0.30</text><text class="svgtext" x="52" y="179" text-anchor="end">0.38</text><text class="svgtext" x="52" y="134" text-anchor="end">0.46</text><text class="svgtext" x="52" y="89" text-anchor="end">0.54</text><text class="svgtext" x="52" y="44" text-anchor="end">0.62</text>
+        <path class="curve" d="M60 221 L75 99 L90 90 L105 84 L120 77 L135 74 L180 65 L210 60 L240 55 L285 51 L300 51 L330 51 L360 53 L390 53 L435 53 L510 53 L585 59 L660 60"/>
+        <circle class="point" cx="60" cy="221" r="3"/><circle class="point" cx="75" cy="99" r="3"/><circle class="point" cx="90" cy="90" r="3"/><circle class="point" cx="105" cy="84" r="3"/><circle class="point" cx="120" cy="77" r="3"/><circle class="point" cx="135" cy="74" r="3"/><circle class="point" cx="180" cy="65" r="3"/><circle class="point" cx="210" cy="60" r="3"/><circle class="point" cx="240" cy="55" r="3"/><circle class="point" cx="285" cy="51" r="3"/><circle class="best" cx="300" cy="51" r="6"/><circle class="point" cx="330" cy="51" r="3"/><circle class="point" cx="360" cy="53" r="3"/><circle class="point" cx="390" cy="53" r="3"/><circle class="point" cx="435" cy="53" r="3"/><circle class="point" cx="510" cy="53" r="3"/><circle class="point" cx="585" cy="59" r="3"/><circle class="point" cx="660" cy="60" r="3"/>
+        <text class="svgstrong" x="300" y="33" text-anchor="middle">best: 16 / 0.5994</text>
+        <text class="svgtext" x="60" y="242" text-anchor="middle">0</text><text class="svgtext" x="135" y="242" text-anchor="middle">5</text><text class="svgtext" x="210" y="242" text-anchor="middle">10</text><text class="svgstrong" x="300" y="242" text-anchor="middle">16</text><text class="svgtext" x="360" y="242" text-anchor="middle">20</text><text class="svgtext" x="510" y="242" text-anchor="middle">30</text><text class="svgtext" x="660" y="242" text-anchor="middle">40</text>
+        <text class="svgtext" x="360" y="264" text-anchor="middle">Viterbi penalty</text>
+      </svg>
+    </div>
+    <div class="card">
+      <div class="stat"><span class="label">Schema 03 validation</span><span class="value">0.5896</span><span>spellF1 at penalty 20</span></div>
+      <div class="stat"><span class="label">Schema 04 validation</span><span class="value">0.5994</span><span>best spellF1 at penalty 16</span></div>
+      <div class="stat"><span class="label">BAR-ATH public check</span><span class="value">0.6303</span><span>spellF1 at frozen penalty 20</span></div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:20px">
+    <h2 style="margin-top:0">Raw versus smoothed spellF1</h2>
+    <div class="bars">
+      <div><div class="barhead"><span>Schema 04 validation · raw</span><strong>0.2989</strong></div><div class="track"><div class="fill raw" style="width:29.89%"></div></div></div>
+      <div><div class="barhead"><span>Schema 04 validation · penalty 16</span><strong>0.5994</strong></div><div class="track"><div class="fill selected" style="width:59.94%"></div></div></div>
+      <div><div class="barhead"><span>Sportec test · raw</span><strong>0.3050</strong></div><div class="track"><div class="fill raw" style="width:30.50%"></div></div></div>
+      <div><div class="barhead"><span>Sportec test · penalty 16</span><strong>0.6290</strong></div><div class="track"><div class="fill test" style="width:62.90%"></div></div></div>
+      <div><div class="barhead"><span>Sportec test · penalty 20</span><strong>0.6352</strong></div><div class="track"><div class="fill selected" style="width:63.52%"></div></div></div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:20px">
+    <h2 style="margin-top:0">Possession-spell counts</h2>
+    <table>
+      <thead><tr><th>Run</th><th>Predicted spells</th><th>True spells</th><th>Mean spell duration</th></tr></thead>
+      <tbody>
+        <tr><td>Schema 04 validation · raw</td><td>972.5</td><td>314.5</td><td>3.45 s</td></tr>
+        <tr><td>Schema 04 validation · penalty 16</td><td>292.0</td><td>314.5</td><td>—</td></tr>
+        <tr><td>Sportec test · raw</td><td>1,011</td><td>294</td><td>3.48 s</td></tr>
+        <tr><td>Sportec test · penalty 16</td><td>305</td><td>294</td><td>11.53 s</td></tr>
+        <tr><td>Sportec test · penalty 20</td><td>291</td><td>294</td><td>12.07 s</td></tr>
+        <tr><td>BAR-ATH public · penalty 20</td><td>16</td><td>17</td><td>16.31 s</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <p class="note">Penalty 16 is selected by validation only. Held-out Sportec and BAR-ATH public scores are reported as checks and are not used to tune the model.</p>
+</main>
+</body>
+</html>
+
