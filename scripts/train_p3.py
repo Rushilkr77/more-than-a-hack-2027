@@ -20,6 +20,11 @@ from src.models import p3_tcn
 OUT = os.path.join(ROOT, "outputs", "p3")
 
 
+def log_event(event, **details):
+    """Emit one flushed JSON progress record for a long-running training job."""
+    print(json.dumps({"event": event, **details}), flush=True)
+
+
 def schemas_to_run(config, schema):
     """Run both approved schemas unless one exact schema was requested."""
     if schema is None:
@@ -90,9 +95,11 @@ def _mean_metrics(probabilities, data, config, penalty=None):
 
 
 def _train_schema(schema, config, split, data, device):
+    log_event("schema_preparation_started", schema=schema)
     train_sequences = []
     train_values = []
     for name in split["train"]:
+        log_event("train_match_preparing", schema=schema, match=name)
         for match in (data[name], sportec.mirrored(data[name])):
             values, periods = p3_tcn.feature_matrix(match, config, schema)
             train_values.append(values)
@@ -103,6 +110,7 @@ def _train_schema(schema, config, split, data, device):
     validation = {}
     validation_sequences = []
     for name in split["validate"]:
+        log_event("validation_match_preparing", schema=schema, match=name)
         values, periods = p3_tcn.feature_matrix(data[name], config, schema)
         validation[name] = (scaler.transform(values), periods)
         validation_sequences.append((validation[name][0], periods, _label_codes(data[name].labels["raw"], config)))
@@ -114,18 +122,31 @@ def _train_schema(schema, config, split, data, device):
     loss_fn = torch.nn.CrossEntropyLoss(weight=torch.tensor(weights, dtype=torch.float32, device=device))
     model = p3_tcn.P3Model(config, schema).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
+    log_event(
+        "schema_training_started",
+        schema=schema,
+        device=str(device),
+        train_frames=len(train_loader.dataset),
+        validation_frames=len(validation_loader.dataset),
+        epochs=config.max_epochs,
+        batch_size=config.batch_size,
+    )
 
     best_loss = float("inf")
     best_state = None
     remaining = config.early_stopping_patience
     for epoch in range(config.max_epochs):
         model.train()
+        train_loss_total = 0.0
+        train_rows = 0
         for windows, labels in train_loader:
             optimizer.zero_grad()
             logits = p3_tcn.target_logits(model(windows.to(device)))
             loss = loss_fn(logits, labels.to(device))
             loss.backward()
             optimizer.step()
+            train_loss_total += float(loss.detach().cpu()) * len(labels)
+            train_rows += len(labels)
         model.eval()
         losses = []
         with torch.no_grad():
@@ -137,10 +158,23 @@ def _train_schema(schema, config, split, data, device):
             best_loss = validation_loss
             best_state = copy.deepcopy(model.state_dict())
             remaining = config.early_stopping_patience
+            improved = True
         else:
             remaining -= 1
-            if remaining == 0:
-                break
+            improved = False
+        log_event(
+            "epoch_finished",
+            schema=schema,
+            epoch=epoch + 1,
+            train_loss=train_loss_total / train_rows,
+            validation_loss=validation_loss,
+            best_validation_loss=best_loss,
+            improved=improved,
+            early_stop_remaining=remaining,
+        )
+        if not improved and remaining == 0:
+            log_event("early_stopping", schema=schema, epoch=epoch + 1)
+            break
     model.load_state_dict(best_state)
 
     probabilities = {
@@ -167,6 +201,14 @@ def _train_schema(schema, config, split, data, device):
     }
     with open(os.path.join(directory, "metrics.json"), "w") as file:
         json.dump(result, file, indent=2)
+    log_event(
+        "schema_finished",
+        schema=schema,
+        validation_loss=best_loss,
+        spellF1=result["spellF1"],
+        macroF1=result["macroF1"],
+        switch_penalty=penalty,
+    )
     return result
 
 
@@ -178,14 +220,19 @@ def main():
     config = p3_tcn.load_config(args.config)
     torch.manual_seed(config.seed)
     split = sportec.split()
-    data = {name: sportec.load(name) for name in split["train"] + split["validate"]}
+    schemas = schemas_to_run(config, args.schema)
     device = _device()
-    results = [_train_schema(schema, config, split, data, device) for schema in schemas_to_run(config, args.schema)]
+    log_event("training_started", schemas=list(schemas), device=str(device), config=args.config)
+    log_event("sportec_loading_started", matches=split["train"] + split["validate"])
+    data = {name: sportec.load(name) for name in split["train"] + split["validate"]}
+    log_event("sportec_loading_finished", matches=list(data))
+    results = [_train_schema(schema, config, split, data, device) for schema in schemas]
     selected = p3_tcn.select_run([result for result in results])
     os.makedirs(OUT, exist_ok=True)
     with open(os.path.join(OUT, "selection.json"), "w") as file:
         json.dump(selected, file, indent=2)
-    print(json.dumps(selected, indent=2))
+    log_event("training_finished", selected_schema=selected["schema"], spellF1=selected["spellF1"], macroF1=selected["macroF1"])
+    print(json.dumps(selected, indent=2), flush=True)
 
 
 if __name__ == "__main__":

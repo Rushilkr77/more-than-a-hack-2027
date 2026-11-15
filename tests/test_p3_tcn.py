@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import json
 
 from src.features import model_inputs as mi
 from src.models import p3_tcn
@@ -123,3 +124,10 @@ def test_train_script_runs_both_configured_schemas_by_default():
 
     assert train_p3.schemas_to_run(config, None) == config.schemas
     assert train_p3.schemas_to_run(config, mi.SCHEMA_BALL) == (mi.SCHEMA_BALL,)
+
+
+def test_training_log_is_machine_readable_and_flushed(capsys):
+    train_p3.log_event("schema_started", schema=mi.SCHEMA_BALL, epoch=1)
+
+    record = json.loads(capsys.readouterr().out)
+    assert record == {"event": "schema_started", "schema": mi.SCHEMA_BALL, "epoch": 1}
