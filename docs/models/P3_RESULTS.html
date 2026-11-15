@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>P3 TCN results</title>
+<title>P2 and P3 results</title>
 <style>
   :root { color-scheme: light dark; --bg: #101318; --surface: #181d25; --text: #eef2f7; --muted: #aab4c0; --line: #5a6778; --blue: #6cb6ff; --green: #4dd4ac; --orange: #f5a65b; --purple: #c8a2ff; }
   @media (prefers-color-scheme: light) { :root { --bg: #f6f8fb; --surface: #fff; --text: #18212c; --muted: #536273; --line: #b7c2cf; --blue: #1769c2; --green: #087f5b; --orange: #ae5a00; --purple: #7546ba; } }
@@ -43,7 +43,7 @@
 </head>
 <body>
 <main>
-  <h1>P3 TCN results</h1>
+  <h1>P2 and P3 results</h1>
   <p class="sub">Selected model: schema 04 · 3 seconds past / 1 second future · exact 80-column input schema</p>
 
   <section class="grid" aria-label="Validation results">
@@ -92,6 +92,16 @@
         <tr><td>BAR-ATH public · penalty 20</td><td>16</td><td>17</td><td>16.31 s</td></tr>
       </tbody>
     </table>
+  </section>
+
+  <section class="card" style="margin-top:20px">
+    <h2 style="margin-top:0">P2 raw versus smoothed spellF1</h2>
+    <div class="bars">
+      <div><div class="barhead"><span>Sportec validation · raw</span><strong>0.313</strong></div><div class="track"><div class="fill raw" style="width:31.3%"></div></div></div>
+      <div><div class="barhead"><span>Sportec validation · penalty 20</span><strong>0.671</strong></div><div class="track"><div class="fill selected" style="width:67.1%"></div></div></div>
+      <div><div class="barhead"><span>BAR-ATH public five minutes · raw</span><strong>0.288</strong></div><div class="track"><div class="fill raw" style="width:28.8%"></div></div></div>
+      <div><div class="barhead"><span>BAR-ATH public five minutes · penalty 20</span><strong>0.734</strong></div><div class="track"><div class="fill test" style="width:73.4%"></div></div></div>
+    </div>
   </section>
   <p class="note">Penalty 16 is selected by validation only. Held-out Sportec and BAR-ATH public scores are reported as checks and are not used to tune the model.</p>
 </main>
