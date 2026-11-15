@@ -2,3 +2,4 @@
 pyarrow
 pytest
 scikit-learn>=1.7
+torch==2.14.1
