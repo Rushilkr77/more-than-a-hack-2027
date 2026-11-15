@@ -14,8 +14,12 @@ spellF1 against `labels_adjusted` (Sportec) and the public BAR-ATH window. P2 = 
 | Organiser baseline smooth50 | 0.219 | 0.326 |
 | Organiser baseline raw | 0.049 | 0.039 |
 
+Final-submission form is the 3-seed probability ensemble (`python scripts/train_p2.py --ensemble`): Sportec test
+0.662 smoothed / 0.345 unsmoothed, BAR-ATH 0.735 / 0.380. Full table in `docs/models/P2.md`. If P4 submits an ensemble,
+compare it to these; during development compare single-seed means.
+
 Report both smoothed and unsmoothed. P2's frame-level macroF1 is about 0.90 on Sportec and 0.84 on BAR-ATH.
-Validation was reused for about 30 tuning decisions, so 0.67 is optimistic. The test match J03WQQ has not been scored.
+Validation was reused for about 30 tuning decisions, so 0.67 is optimistic. The Sportec test match J03WQQ has been scored for P2 (single seeds 0.653 smoothed / 0.300 unsmoothed); do not tune on it.
 
 ## Protocol P2 uses (copy it so numbers are comparable)
 

@@ -58,8 +58,9 @@ def feats(match: sportec.MatchData, variant: str) -> pd.DataFrame:
     return X[[column for column in X if not any(token in column for token in drop)]]
 
 
-def run(variant, split, data):
+def run(variant, split, data, seeds=(0,)):
     t0 = time.time()
+    tag = variant + ("_ens" if len(seeds) > 1 else "")
     Xs, ys = [], []
     for name in split["train"]:
         for match in (data[name], sportec.mirrored(data[name])):
@@ -70,26 +71,29 @@ def run(variant, split, data):
     validation = {name: feats(data[name], variant) for name in split["validate"]}
     X_val = pd.concat([X_match.iloc[::STEP] for X_match in validation.values()], ignore_index=True)
     y_val = np.concatenate([data[name].labels["raw"][::STEP] for name in split["validate"]])
-    model = p2_gbt.train(X, y, X_val, y_val)
-    probabilities = {name: p2_gbt.predict_proba(model, X_match) for name, X_match in validation.items()}
+    models = [p2_gbt.train(X, y, X_val, y_val, seed=seed) for seed in seeds]
+    # seeds > 1: average P(H), P(A), P(D) across seeds before smoothing (the final-submission form)
+    probabilities = {name: np.mean([p2_gbt.predict_proba(model, X_match) for model in models], axis=0)
+                     for name, X_match in validation.items()}
 
     penalty, curve = sportec.tune_penalty(probabilities, data)
     rows = []
     for name, proba in probabilities.items():
         raw = p2_gbt.CLASSES[proba.argmax(axis=1)]
         smoothed = smooth(proba, data[name].table["period"], penalty)
-        sportec.write(os.path.join(OUT, variant, "raw", name + ".csv"), raw)
-        sportec.write(os.path.join(OUT, variant, "smoothed", name + ".csv"), smoothed)
+        sportec.write(os.path.join(OUT, tag, "raw", name + ".csv"), raw)
+        sportec.write(os.path.join(OUT, tag, "smoothed", name + ".csv"), smoothed)
         for output, labels in (("model only", raw), ("smoothed", smoothed)):
-            rows.append({"version": variant, "match": name, "output": output,
+            rows.append({"version": tag, "match": name, "output": output,
                          **sportec.score(data[name].labels["adjusted"], labels)})
     metadata = {
-        "version": variant, "features": X.shape[1], "train_rows": len(X), "iterations": int(model.n_iter_),
+        "version": tag, "features": X.shape[1], "train_rows": len(X), "seeds": list(seeds),
+        "iterations": [int(model.n_iter_) for model in models],
         "switch_penalty": penalty, "penalty_curve": {str(key): round(value, 4) for key, value in curve.items()},
         "seconds": round(time.time() - t0, 1),
     }
-    os.makedirs(os.path.join(OUT, variant), exist_ok=True)
-    with open(os.path.join(OUT, variant, "meta.json"), "w") as file:
+    os.makedirs(os.path.join(OUT, tag), exist_ok=True)
+    with open(os.path.join(OUT, tag, "meta.json"), "w") as file:
         json.dump(metadata, file, indent=2)
     return rows, metadata
 
@@ -109,6 +113,7 @@ def compare(base, candidate, split):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--version", choices=sorted(VARIANTS), action="append")
+    parser.add_argument("--ensemble", action="store_true", help="average probabilities over seeds 0, 1, 2")
     parser.add_argument("--compare", nargs=2, metavar=("BASE", "CANDIDATE"))
     args = parser.parse_args()
     split = sportec.split()
@@ -117,7 +122,7 @@ def main():
     data = {name: sportec.load(name) for name in split["train"] + split["validate"]}
     rows = []
     for variant in args.version or [FINAL]:
-        result, metadata = run(variant, split, data)
+        result, metadata = run(variant, split, data, (0, 1, 2) if args.ensemble else (0,))
         rows += result
         print(json.dumps(metadata))
     print(pd.DataFrame(rows).to_string(index=False, float_format=lambda value: "{:.3f}".format(value)))
