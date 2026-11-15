@@ -5,21 +5,18 @@ smoother and scorer as `docs/common/COMMON_LAYER.md`.
 
 ## Numbers to beat
 
-spellF1 against `labels_adjusted` (Sportec) and the public BAR-ATH window. P2 = `h_sd_win_1_5_15`, no `gtag_*`, mean of 3 seeds.
+P2 = 3-seed probability ensemble (`python scripts/train_p2.py --ensemble`), `h_sd_win_1_5_15`, no `gtag_*`. spellF1 / macroF1.
+Approaches should be compared against these ensemble rows, ideally as ensembles of their own.
 
-| | Sportec validation (2 matches) | BAR-ATH public 5 min (17 possessions) |
-|---|---|---|
-| P2 smoothed (penalty 20) | 0.671 | 0.734 (interval about 0.53-0.90) |
-| P2 unsmoothed | 0.313 | 0.288 |
-| Organiser baseline smooth50 | 0.219 | 0.326 |
-| Organiser baseline raw | 0.049 | 0.039 |
+| | Sportec validation (2 matches) | Sportec test (J03WQQ) | BAR-ATH public 5 min (17 possessions) |
+|---|---|---|---|
+| P2 smoothed (penalty 20) | 0.668 / 0.899 | 0.662 / 0.904 | 0.735 / 0.817 |
+| P2 unsmoothed | 0.363 / 0.900 | 0.345 / 0.899 | 0.380 / 0.844 |
+| Baseline smooth50 | 0.219 / 0.449 | 0.223 / 0.461 | 0.326 / 0.621 |
+| Baseline raw | 0.049 / 0.430 | 0.042 / 0.428 | 0.039 / 0.597 |
 
-Final-submission form is the 3-seed probability ensemble (`python scripts/train_p2.py --ensemble`): Sportec test
-0.662 smoothed / 0.345 unsmoothed, BAR-ATH 0.735 / 0.380. Full table in `docs/models/P2.md`. If P4 submits an ensemble,
-compare it to these; during development compare single-seed means.
-
-Report both smoothed and unsmoothed. P2's frame-level macroF1 is about 0.90 on Sportec and 0.84 on BAR-ATH.
-Validation was reused for about 30 tuning decisions, so 0.67 is optimistic. The Sportec test match J03WQQ has been scored for P2 (single seeds 0.653 smoothed / 0.300 unsmoothed); do not tune on it.
+Report both smoothed and unsmoothed. Validation was reused for about 30 tuning decisions, so its row is optimistic. The
+Sportec test match has been scored for P2; do not tune on it. The BAR-ATH smoothed spellF1 interval is about 0.53-0.90.
 
 ## Protocol P2 uses (copy it so numbers are comparable)
 
