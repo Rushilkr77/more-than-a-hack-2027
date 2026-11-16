@@ -76,15 +76,18 @@ def visibility_report(truth, pred, visible):
     return rows
 
 
-def bar_ath(members, args, penalty):
+def bar_ath(members, args, penalty, save=None):
     """Report-only: frozen model(s) on the public 5-minute BAR-ATH window. Never used to choose anything.
-    members: [(model, scaler)]; probabilities are averaged across members (seed ensemble)."""
+    members: [(model, scaler)]; probabilities are averaged across members (seed ensemble). save: folder for the
+    averaged probabilities (scripts/blend.py reads them)."""
     root = ET.parse(BAR_ATH_META).getroot()
     pitch = (float(root.findtext(".//FieldSize/Width")), float(root.findtext(".//FieldSize/Height")))
     table, slots = ft.load(), ft.load_slots()
     inputs = ci.make_classification_inputs(table, slots, pitch, policy(args.schema), fps=25)
     proba = np.mean([p4_gru.predict_proba(model, p4_gru.transform(feats(inputs, args.gtag), scaler), inputs.period,
                                           args.window * 25 // args.step, args.step) for model, scaler in members], axis=0)
+    if save:
+        np.save(os.path.join(save, "proba_BAR-ATH.npy"), proba)
     gt = pd.read_csv(BAR_ATH_GT)["label"].to_numpy()
     rows = {}
     for output, labels in (("model only", p4_gru.CLASSES[proba.argmax(1)]),
@@ -167,7 +170,7 @@ def ensemble(args, split, data):
     validation, smooth once. Reuses each seed's proba_*.npy and model.pt, so nothing is retrained."""
     seeds = args.seed or [0, 1, 2]
     runs = [os.path.join(OUT, "{}_seed{}".format(stem(args), seed)) for seed in seeds]
-    name = stem(args) + "_ens"
+    name = stem(args) + ("_ens" if len(seeds) == 3 else "_ens{}".format(len(seeds)))
     probabilities = {m: np.mean([np.load(os.path.join(r, "proba_" + m + ".npy")) for r in runs], axis=0)
                      for m in split["validate"]}
     penalty, curve = sportec.tune_penalty(probabilities, data)
@@ -177,6 +180,7 @@ def ensemble(args, split, data):
         smoothed = smooth(proba, data[m].table["period"], penalty)
         sportec.write(os.path.join(OUT, name, "raw", m + ".csv"), raw)
         sportec.write(os.path.join(OUT, name, "smoothed", m + ".csv"), smoothed)
+        np.save(os.path.join(OUT, name, "proba_" + m + ".npy"), proba)
         for output, labels in (("model only", raw), ("smoothed", smoothed)):
             rows.append({"version": name, "match": m, "output": output,
                          **sportec.score(data[m].labels["adjusted"], labels)})
@@ -184,14 +188,21 @@ def ensemble(args, split, data):
                 "switch_penalty": penalty, "penalty_curve": {str(k): round(v, 4) for k, v in curve.items()},
                 "torch": torch.__version__}
     members = []
-    for r in runs if args.bar_ath or args.test else []:
+    for r in runs if args.bar_ath or args.test or args.export else []:
         saved = torch.load(os.path.join(r, "model.pt"), weights_only=False)
         scaler, meta = saved["scaler"], saved["meta"]
         model = p4_gru.GRU(len(scaler["columns"]) + len(scaler["masked"]), meta["hidden"], meta["layers"])
         model.load_state_dict(saved["state_dict"])
         members.append((model.eval(), scaler))
-    if args.bar_ath:
-        metadata["bar_ath_public_report_only"] = bar_ath(members, args, penalty)
+    if args.bar_ath or args.export:
+        metadata["bar_ath_public_report_only"] = bar_ath(members, args, penalty, os.path.join(OUT, name))
+    if args.export and not args.test:
+        # Test-match probabilities for scripts/blend.py. Saved, not scored: blend.py --final scores the test match once.
+        for m in split["test"]:
+            inputs = sportec.classification_inputs(sportec.load(m), policy(args.schema))
+            np.save(os.path.join(OUT, name, "proba_" + m + ".npy"), np.mean(
+                [p4_gru.predict_proba(model, p4_gru.transform(feats(inputs, args.gtag), scaler), inputs.period,
+                                      args.window * 25 // args.step, args.step) for model, scaler in members], axis=0))
     if args.test:
         # Held-out Sportec test match: frozen models and the validation-tuned penalty; scored once, never tuned on.
         for m in split["test"]:
@@ -200,6 +211,7 @@ def ensemble(args, split, data):
             proba = np.mean([p4_gru.predict_proba(model, p4_gru.transform(feats(inputs, args.gtag), scaler),
                                                   inputs.period, args.window * 25 // args.step, args.step)
                              for model, scaler in members], axis=0)
+            np.save(os.path.join(OUT, name, "proba_" + m + ".npy"), proba)
             raw = p4_gru.CLASSES[proba.argmax(axis=1)]
             smoothed = smooth(proba, match.table["period"], penalty)
             sportec.write(os.path.join(OUT, name, "test", "raw", m + ".csv"), raw)
@@ -208,6 +220,9 @@ def ensemble(args, split, data):
                 rows.append({"version": name, "match": m + " (test)", "output": output,
                              **sportec.score(match.labels["adjusted"], labels)})
         metadata["test"] = [row for row in rows if row["match"].endswith("(test)")]
+    elif os.path.exists(os.path.join(OUT, name, "meta.json")):
+        with open(os.path.join(OUT, name, "meta.json")) as file:      # keep an earlier recorded test score
+            metadata.update({k: v for k, v in json.load(file).items() if k == "test"})
     with open(os.path.join(OUT, name, "meta.json"), "w") as file:
         json.dump(metadata, file, indent=2, default=float)
     print(json.dumps(metadata, default=float))
@@ -242,6 +257,9 @@ def main():
                         help="average saved per-seed runs (default seeds 0, 1, 2) instead of training")
     parser.add_argument("--test", action="store_true",
                         help="with --ensemble: score the frozen ensemble on the held-out test match (once, at the end)")
+    parser.add_argument("--export", action="store_true",
+                        help="with --ensemble: save test-match and BAR-ATH probabilities for scripts/blend.py; the "
+                             "test match is not scored")
     parser.add_argument("--compare", nargs=2, metavar=("BASE", "CANDIDATE"))
     args = parser.parse_args()
     split = sportec.split()
