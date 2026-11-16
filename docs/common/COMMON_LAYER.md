@@ -1,4 +1,4 @@
-# Common layer for P2–P5
+# Common layer for P2–P6
 
 Every approach is compared on the same inputs, split, smoother and scorer, so the ranking reflects the models and not
 the plumbing. Everything here is shared; a model branch should only add its own architecture and training.
