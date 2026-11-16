@@ -1,0 +1,2 @@
+-r requirements-team.txt
+torch>=2.8,<3

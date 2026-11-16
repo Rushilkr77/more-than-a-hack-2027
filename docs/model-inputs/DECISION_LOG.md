@@ -217,3 +217,74 @@ repository measurement or a cited source. “Assumption” is labeled separately
 | OPEN-05 | Keep goalkeeper proxy? | Remove-channel ablation and tracker-damage slices. |
 | OPEN-06 | Keep any `gtag_*`? | Whole-block and per-tag ablations; reject if cross-dataset robustness falls. |
 | OPEN-07 | BAR-ATH parity | Requires licensed raw BAR-ATH bundle locally. |
+### IL-018 — P6 starts with the simplest structured baseline
+
+- **Status:** accepted for baseline measurement, not selected for final use.
+- **Decision:** P6 v0 uses schema 03, all observed anonymous players, shared
+  player encoding, symmetric mean pooling, a separate ball encoder, a 127-frame
+  residual TCN and one ternary H/A/D head.
+- **Evidence:** the direct possession paper supports object trajectories and
+  permutation-invariant aggregation; Deep Sets supports symmetric pooling.
+  Schema 03 excludes the optional generated-tag proxy block.
+- **Why not attention/two heads immediately:** four training matches are a
+  narrow independent sample. Adding multiple flexible choices before a stable
+  baseline would make a negative or positive result uninterpretable.
+
+### IL-019 — P2 early stopping must report the executed runtime path
+
+- **Status:** accepted; corrects an execution blocker without hiding it.
+- **Decision:** use explicit validation matches when the installed
+  HistGradientBoosting API supports `X_val`/`y_val`; otherwise use its seeded
+  training-row validation fraction. Store the source in `meta.json`.
+- **Evidence:** scikit-learn 1.7 release notes identify explicit validation
+  data as a new feature. Python 3.9 resolves to scikit-learn 1.6.1, whose fit
+  method rejects those arguments.
+- **Trade-off:** the two P2 numbers are not identical protocols. Keep both
+  provenance labels; do not present the 1.6 reproduction as the original run.
+
+### IL-020 — Do not promote P6 v0; finish the candidate set first
+
+- **Status:** accepted from current validation evidence.
+- **Decision:** P6 v0 is a reproducible baseline only. It is not blended,
+  tested on J03WQQ or preferred over P2. Obtain P3/P4/P5 work before final
+  selection.
+- **Evidence:** the better P6 run reaches 0.377 spellF1 / 0.787 macroF1 versus
+  P2 at 0.675 / 0.904 on the same two validation matches and common smoother.
+  This 0.298 spellF1 gap is materially larger than a close-call uncertainty.
+- **Next architecture change if authorized:** temporal encoding per anonymous
+  player tracklet before symmetric pooling. The current pooling-first order
+  discards individual motion before the TCN; this differs from the closest
+  possession study. Keep attention and two-head output out of that comparison.
+
+### IL-021 — Stop P6 after the pre-registered trajectory-first test
+
+- **Status:** accepted from three-seed validation evidence.
+- **Decision:** retain P6 v0/v1 as reproducible negative results. Do not add
+  attention, nearest-five selection, a two-head loss, blend P6, or load the
+  Sportec test match for P6.
+- **Evidence:** trajectory-first seeds 7/17/27 average 0.406 spellF1 / 0.771
+  macroF1 after the common smoother. Against P6 v0, mean chunk spellF1 gain is
+  +0.011 with 95% interval [-0.020, +0.039], so it fails the keep rule. Against
+  P2, gain is -0.262 [-0.301, -0.225]. Each individual seed also crosses zero
+  versus v0 and is decisively negative versus P2.
+- **Interpretation:** per-object temporal encoding recovers more spell
+  boundaries than pooling-first P6 but does not reliably improve validation,
+  and it reduces frame macroF1. This rejects the tested implementation, not the
+  full family of permutation-invariant temporal models.
+- **Next action:** audit the now-available P3 and P4 branches. Reproduce P4's
+  augmented-data ablation before treating its reported lead as final.
+
+### IL-022 — Existing test results are report-only from now on
+
+- **Status:** accepted as an evaluation-process constraint.
+- **Decision:** do not use `J03WQQ` or BAR-ATH to choose any further feature,
+  architecture, augmentation, penalty, ensemble or blend. Candidate decisions
+  must use the two fixed validation matches and committed reproductions.
+- **Evidence:** the P2/P3/P4 comparison records that `J03WQQ` has been scored
+  more than once for P2 and once for P3/P4. It also states that some P2/P3 and
+  augmented-control scoring came from one-off scripts not present in the
+  repository. BAR-ATH contains only 17 public-window possessions.
+- **Risk controlled:** repeated inspection turns a nominal test set into a
+  selection set even if no single run explicitly trains on its labels.
+- **Consequence:** existing test numbers may be reported with provenance, but
+  they no longer provide clean confirmatory evidence for new decisions.
