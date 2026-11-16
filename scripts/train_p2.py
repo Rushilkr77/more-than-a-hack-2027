@@ -80,11 +80,19 @@ def run(variant, split, data):
         smoothed = smooth(proba, data[name].table["period"], penalty)
         sportec.write(os.path.join(OUT, variant, "raw", name + ".csv"), raw)
         sportec.write(os.path.join(OUT, variant, "smoothed", name + ".csv"), smoothed)
+        probability_dir = os.path.join(OUT, variant, "proba")
+        os.makedirs(probability_dir, exist_ok=True)
+        np.save(os.path.join(probability_dir, name + ".npy"), proba)
+        np.save(
+            os.path.join(probability_dir, name + "_period.npy"),
+            data[name].table["period"].to_numpy(),
+        )
         for output, labels in (("model only", raw), ("smoothed", smoothed)):
             rows.append({"version": variant, "match": name, "output": output,
                          **sportec.score(data[name].labels["adjusted"], labels)})
     metadata = {
         "version": variant, "features": X.shape[1], "train_rows": len(X), "iterations": int(model.n_iter_),
+        "early_stopping_validation": model.p2_validation_mode_,
         "switch_penalty": penalty, "penalty_curve": {str(key): round(value, 4) for key, value in curve.items()},
         "seconds": round(time.time() - t0, 1),
     }
