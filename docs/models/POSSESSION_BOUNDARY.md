@@ -49,3 +49,35 @@ The ignored output directory holds per-match label CSVs, `events.jsonl`, and
 `meta.json` with the source revision, library versions, hashes of the input
 arrays, match scores and keep result. Choose a new directory with `--output`
 for each run.
+
+## Validation log, 2026-11-17
+
+Run revision `2753216`, clean tree, Python 3.12.12, scikit-learn 1.7.2,
+NumPy 2.5.5. The P2 member was regenerated with explicit whole-match validation.
+The GRU-30 member was regenerated with PyTorch 2.8.0. These are locally
+regenerated artifacts, with different scores and provenance from PR #16's
+published artifacts.
+
+| Two-member check | Fixed spell-F1 | Learned spell-F1 | Fixed macro-F1 | Learned macro-F1 | Fixed / learned / true spells |
+|---|---:|---:|---:|---:|---:|
+| J03WMX | 0.67714 | 0.68327 | 0.91191 | 0.91236 | 246 / 248 / 314 |
+| J03WOY | 0.72313 | 0.72068 | 0.90325 | 0.90460 | 273 / 275 / 315 |
+| Mean | 0.70014 | 0.70198 | 0.90758 | 0.90848 | |
+
+Paired mean chunk gain **+0.00364**, 95% interval **[-0.00266, +0.01095]**,
+97 chunks. The check fails both the interval and the whole-match direction
+requirements. Boundary average precision was 0.3720 / 0.3802 at a positive share
+of 0.0313 / 0.0328. The detector learned a signal, but this check did not show
+an actionable improvement in decoded spells.
+
+```text
+J03WN1 rows=28312 positives=1298
+J03WOH rows=27442 positives=1083
+J03WPY rows=29242 positives=1103
+J03WR9 rows=29361 positives=990
+train_prevalence=0.03912310
+output=outputs/possession_boundary/v1_p2_gru30
+keep=false
+```
+
+The three-member comparison is pending regeneration of the GRU-20 artifacts.
