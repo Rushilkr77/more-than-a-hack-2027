@@ -1,0 +1,34 @@
+{
+  "decision_date": "2026-11-17",
+  "decision": "deadline_point_estimate_leader",
+  "evidence_status": "best_measured_on_reused_validation_not_statistically_confirmed",
+  "data_contract": "processed Sportec bundles; fixed 4 train / 2 validate split; raw labels for training; adjusted labels for scoring",
+  "candidate": {
+    "name": "audit_p2_p4w30_p4w20_p3",
+    "members": [
+      "outputs/p2/h_sd_win_1_5_15_ens",
+      "outputs/p4/04_g0_w30_s5_aug2_ens",
+      "outputs/p4/04_g0_w20_s5_aug2_ens",
+      "outputs/p3_10x10_501/schema_04"
+    ],
+    "blend": "equal arithmetic probabilities",
+    "decoder": "single common Viterbi smoother after blending",
+    "switch_penalty": 20,
+    "validation_spellF1": 0.7282445908485438,
+    "validation_macroF1": 0.9120530533436457,
+    "validation_per_match_spellF1": {
+      "J03WMX": 0.6957446808510638,
+      "J03WOY": 0.7607445008460236
+    },
+    "incumbent_chunk_gain_mean": 0.002176,
+    "incumbent_chunk_gain_ci95": [-0.026348, 0.024899],
+    "keep_rule_passed": false
+  },
+  "conservative_incumbent": {
+    "name": "audit_p2_p4w30_p4w20",
+    "validation_spellF1": 0.7151053188419736,
+    "validation_macroF1": 0.9110830508723848
+  },
+  "test_policy": "J03WQQ and BAR-ATH were previously viewed and were not loaded for these new decisions; obtain a new independent match for confirmation",
+  "reproduce_candidate": "python scripts/blend.py --name audit_p2_p4w30_p4w20_p3 --members outputs/p2/h_sd_win_1_5_15_ens outputs/p4/04_g0_w30_s5_aug2_ens outputs/p4/04_g0_w20_s5_aug2_ens outputs/p3_10x10_501/schema_04"
+}

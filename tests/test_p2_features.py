@@ -57,4 +57,8 @@ def test_p2_training_ignores_only_columns_missing_in_every_training_row():
     model = p2_gbt.train(X.iloc[:240], labels[:240], X.iloc[240:], labels[240:], max_iter=3)
 
     assert "left_anchor_margin_m" not in model.p2_columns_
+    assert model.p2_validation_mode_ in {
+        "explicit_grouped_validation",
+        "internal_train_fraction",
+    }
     assert p2_gbt.predict_proba(model, X.iloc[240:]).shape == (60, 3)

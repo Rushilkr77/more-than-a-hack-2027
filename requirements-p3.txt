@@ -1,0 +1,6 @@
+-r requirements.txt
+pyarrow
+pytest
+scikit-learn==1.7.2
+torch==2.15.0
+pytorch-tcn==1.2.3

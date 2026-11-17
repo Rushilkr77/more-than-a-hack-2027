@@ -35,9 +35,24 @@ TEST_MARKER = os.path.join(OUT, "TEST_SCORED.json")
 
 def blend(probas, weights=None, mean="arith"):
     """Weighted average of [frames, 3] probability arrays; 'geo' averages log-probabilities and renormalises."""
-    w = np.ones(len(probas)) if weights is None else np.asarray(weights, float)
+    if not probas:
+        raise ValueError("at least one probability member is required")
+    arrays = [np.asarray(proba, float) for proba in probas]
+    shape = arrays[0].shape
+    if len(shape) != 2 or shape[1] != 3 or any(array.shape != shape for array in arrays):
+        raise ValueError("all probability members must have the same [frames, 3] shape")
+    if any(
+        not np.isfinite(array).all()
+        or (array < 0).any()
+        or not np.allclose(array.sum(axis=1), 1.0, atol=1e-4)
+        for array in arrays
+    ):
+        raise ValueError("members must contain finite non-negative probability rows summing to one")
+    w = np.ones(len(arrays)) if weights is None else np.asarray(weights, float)
+    if w.shape != (len(arrays),) or not np.isfinite(w).all() or (w < 0).any() or w.sum() <= 0:
+        raise ValueError("weights must be one finite non-negative value per member with positive total")
     w = w / w.sum()
-    stack = np.stack([np.asarray(p, float) for p in probas])
+    stack = np.stack(arrays)
     if mean == "arith":
         return np.tensordot(w, stack, axes=1)
     out = np.exp(np.tensordot(w, np.log(np.clip(stack, 1e-6, 1.0)), axes=1))
@@ -46,6 +61,28 @@ def blend(probas, weights=None, mean="arith"):
 
 def member_proba(members, match, weights, mean):
     return blend([np.load(os.path.join(m, "proba_" + match + ".npy")) for m in members], weights, mean)
+
+
+def missing_ball_blend(base_probas, extra_proba, ball_visible):
+    """Use an extra equal-weight member only on frames where the ball is missing."""
+    visible = np.asarray(ball_visible)
+    if visible.dtype != np.bool_ or visible.shape != (len(extra_proba),):
+        raise ValueError("ball_visible must be one boolean per probability frame")
+    output = blend(base_probas)
+    missing = ~visible
+    if missing.any():
+        output[missing] = blend([*base_probas, extra_proba])[missing]
+    return output
+
+
+def candidate_proba(args, match, ball_visible):
+    base = [np.load(os.path.join(member, "proba_" + match + ".npy")) for member in args.members]
+    if args.missing_ball_member is None:
+        return blend(base, args.weights, args.mean)
+    if args.weights is not None or args.mean != "arith":
+        raise ValueError("the fixed missing-ball experiment requires equal arithmetic base members")
+    extra = np.load(os.path.join(args.missing_ball_member, "proba_" + match + ".npy"))
+    return missing_ball_blend(base, extra, ball_visible)
 
 
 def report(gt, proba, period, penalty, kw, folder, match, interval=False):
@@ -67,7 +104,13 @@ def run(args):
     if args.min_frames > 1:
         kw["min_frames"] = args.min_frames
     data = {m: sportec.load(m) for m in split["validate"]}
-    probas = {m: member_proba(args.members, m, args.weights, args.mean) for m in data}
+    probas = {
+        m: candidate_proba(args, m, data[m].table["ball_visible"].to_numpy(dtype=bool))
+        for m in data
+    }
+    os.makedirs(folder, exist_ok=True)
+    for match, proba in probas.items():
+        np.save(os.path.join(folder, "proba_" + match + ".npy"), proba)
     curve = {lam: float(np.mean([sportec.score(data[m].labels["adjusted"],
                                                smooth(probas[m], data[m].table["period"], lam, **kw))["spellF1"]
                                  for m in probas])) for lam in args.penalties}
@@ -76,23 +119,29 @@ def run(args):
                for m in probas}
     meta = {"version": args.name, "members": [os.path.relpath(os.path.abspath(m), ROOT) for m in args.members],
             "weights": args.weights, "mean": args.mean, "smoother": kw, "switch_penalty": penalty,
+            "missing_ball_member": (os.path.relpath(os.path.abspath(args.missing_ball_member), ROOT)
+                                    if args.missing_ball_member else None),
             "penalty_curve": {str(k): round(v, 4) for k, v in curve.items()},
             "validation": {out: {k: float(np.mean([results[m][out][k] for m in results]))
                                  for k in ("spellF1", "macroF1", "spells", "true_spells")}
                            for out in ("model only", "smoothed")},
             "validation_per_match": results}
-    if all(os.path.exists(os.path.join(m, "proba_" + BAR_ATH + ".npy")) for m in args.members):
+    report_members = args.members + ([args.missing_ball_member] if args.missing_ball_member else [])
+    if all(os.path.exists(os.path.join(m, "proba_" + BAR_ATH + ".npy")) for m in report_members):
+        frame_table = ft.load()
         meta["bar_ath_public_report_only"] = report(
-            pd.read_csv(BAR_ATH_GT)["label"].to_numpy(), member_proba(args.members, BAR_ATH, args.weights, args.mean),
-            ft.load()["period"], penalty, kw, folder, BAR_ATH, interval=True)
+            pd.read_csv(BAR_ATH_GT)["label"].to_numpy(),
+            candidate_proba(args, BAR_ATH, frame_table["ball_visible"].to_numpy(dtype=bool)),
+            frame_table["period"], penalty, kw, folder, BAR_ATH, interval=True)
     if args.final:
         if os.path.exists(TEST_MARKER):
             sys.exit("the test match was already scored: " + open(TEST_MARKER).read())
         meta["test"] = {}
         for m in split["test"]:
             match = sportec.load(m)
-            meta["test"][m] = report(match.labels["adjusted"], member_proba(args.members, m, args.weights, args.mean),
-                                     match.table["period"], penalty, kw, os.path.join(folder, "test"), m)
+            test_proba = candidate_proba(args, m, match.table["ball_visible"].to_numpy(dtype=bool))
+            meta["test"][m] = report(match.labels["adjusted"], test_proba, match.table["period"], penalty, kw,
+                                     os.path.join(folder, "test"), m)
         with open(TEST_MARKER, "w") as file:
             json.dump({"version": args.name, "test": meta["test"]}, file, indent=2, default=float)
     with open(os.path.join(folder, "meta.json"), "w") as file:
@@ -124,6 +173,7 @@ def main():
     parser.add_argument("--members", nargs="+", help="run folders with proba_<match>.npy")
     parser.add_argument("--weights", nargs="+", type=float, help="one per member (default equal)")
     parser.add_argument("--mean", choices=("arith", "geo"), default="arith")
+    parser.add_argument("--missing-ball-member", help="extra equal-weight member used only when ball_visible is false")
     parser.add_argument("--penalties", nargs="+", type=float, default=list(sportec.PENALTIES))
     parser.add_argument("--team-penalty", type=float)
     parser.add_argument("--dead-penalty", type=float)

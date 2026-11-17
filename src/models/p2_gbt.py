@@ -1,5 +1,7 @@
 """P2: gradient-boosted trees over the selected common flat input view."""
 
+import inspect
+
 import numpy as np
 import pandas as pd
 
@@ -58,7 +60,12 @@ def train(X, y, X_val, y_val, seed=0, **params):
     if not columns:
         raise ValueError("P2 cannot train when every selected feature is missing")
     model = HistGradientBoostingClassifier(**{**PARAMS, **params}, random_state=seed)
-    model.fit(X[columns], y, X_val=X_val[columns], y_val=y_val)
+    if "X_val" in inspect.signature(model.fit).parameters:
+        model.fit(X[columns], y, X_val=X_val[columns], y_val=y_val)
+        model.p2_validation_mode_ = "explicit_grouped_validation"
+    else:
+        model.fit(X[columns], y)
+        model.p2_validation_mode_ = "internal_train_fraction"
     model.p2_columns_ = columns
     return model
 
