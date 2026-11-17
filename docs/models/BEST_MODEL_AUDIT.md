@@ -200,6 +200,13 @@ Because the user explicitly prefers results over a maximally conservative
 choice for the deadline, it is packaged as the deadline point-estimate leader
 in `configs/best_model_selection.json`.
 
+The selection manifest records the SHA-256 digest of every member probability
+array for both validation matches. `python scripts/verify_best_model.py`
+refuses missing, changed or path-escaping artifacts, rebuilds the equal blend,
+applies the frozen penalty-20 decoder, and asserts both per-match and aggregate
+scores to 1e-12. On the selected artifacts it reproduces 0.7282445908485438
+spellF1 / 0.9120530533436457 macroF1 with `test_matches_loaded: []`.
+
 This is not a claim of statistically established superiority. Its 97-chunk
 interval against the three-member incumbent crosses zero, the validation set
 has been reused, and the previously scored test cannot provide an independent

@@ -20,6 +20,24 @@
       "J03WMX": 0.6957446808510638,
       "J03WOY": 0.7607445008460236
     },
+    "validation_per_match_macroF1": {
+      "J03WMX": 0.9154426923795852,
+      "J03WOY": 0.9086634143077061
+    },
+    "validation_probability_sha256": {
+      "J03WMX": {
+        "outputs/p2/h_sd_win_1_5_15_ens": "2497ed78a6831a644d74a5f70a3b5a1e47d2c28e09ffa723c2af60999a82a03c",
+        "outputs/p4/04_g0_w30_s5_aug2_ens": "1df10f8d3306a73bc1b247fe51845129fba5a8dcaabdcd2f59c5e297073e86fd",
+        "outputs/p4/04_g0_w20_s5_aug2_ens": "962b0fd1a8833be8bc0f9e0c43ecb885185579738fe7c97a2aedc0b829ec10ca",
+        "outputs/p3_10x10_501/schema_04": "ed12f6b745a66910ecba8ccdf9decfd12530fe1c9e035ef5aa99d4b070a30277"
+      },
+      "J03WOY": {
+        "outputs/p2/h_sd_win_1_5_15_ens": "df879f28808fdb6a4ccdd8dd1e4460e5f313e91dcbab93f0a5e8da1c3e4753f7",
+        "outputs/p4/04_g0_w30_s5_aug2_ens": "a1b58de5dbf95833ed5475242aa0cb833b9cac2a92c76e6beaf8437292a42b4b",
+        "outputs/p4/04_g0_w20_s5_aug2_ens": "aa713b5b85820e70ba2ddcb55e611ca20729fa6a78545ab4b1352799120e745b",
+        "outputs/p3_10x10_501/schema_04": "9737b5e63654f89ff4b021a2f079364b664f6c11903ad29aa8edc05a0f6a6883"
+      }
+    },
     "incumbent_chunk_gain_mean": 0.002176,
     "incumbent_chunk_gain_ci95": [-0.026348, 0.024899],
     "keep_rule_passed": false
@@ -30,5 +48,6 @@
     "validation_macroF1": 0.9110830508723848
   },
   "test_policy": "J03WQQ and BAR-ATH were previously viewed and were not loaded for these new decisions; obtain a new independent match for confirmation",
-  "reproduce_candidate": "python scripts/blend.py --name audit_p2_p4w30_p4w20_p3 --members outputs/p2/h_sd_win_1_5_15_ens outputs/p4/04_g0_w30_s5_aug2_ens outputs/p4/04_g0_w20_s5_aug2_ens outputs/p3_10x10_501/schema_04"
+  "reproduce_candidate": "python scripts/blend.py --name audit_p2_p4w30_p4w20_p3 --members outputs/p2/h_sd_win_1_5_15_ens outputs/p4/04_g0_w30_s5_aug2_ens outputs/p4/04_g0_w20_s5_aug2_ens outputs/p3_10x10_501/schema_04",
+  "verify_candidate": "python scripts/verify_best_model.py"
 }
