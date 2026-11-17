@@ -139,6 +139,19 @@ pip install -r requirements-p3.txt       # P3 TCN (use a second venv if the torc
    ```
    Split: `configs/sportec_split.json`.
 
+### Fastest route: regenerate the submitted file from the saved weights
+`weights/` holds the trained models (about 6 MB: P2 trees, six P4 GRUs, the P3 TCN; trained only on Sportec data, no
+BAR-ATH data). With the BAR-ATH bundle in `data/tactical/` this reproduces the submitted file exactly, without
+training or the Sportec download:
+```bash
+python scripts/predict_bar_ath.py                  # weights -> outputs/<member>/proba_BAR-ATH.npy
+python scripts/make_submission.py --out BlrBoys.csv
+python evaluation/validate_submission.py BlrBoys.csv
+```
+We checked this: the four probability files and the CSV came out byte-identical to the ones we submitted
+(SHA-256 of `BlrBoys.csv`: `35f82fe0dcb5078cdd7ea86528695a90a33dd44ee4743b0d3b5d45654a61cec2`).
+
+### Or retrain from scratch
 ### Train the four members and export BAR-ATH probabilities
 ```bash
 # P2 (final form is the script default: 3-seed ensemble, no gtag_*, 282 features)
@@ -168,8 +181,8 @@ smoother are deterministic: the same member probability files always produce the
 the files were byte-identical).
 
 ### What is and is not byte-reproducible
-Training uses fixed seeds and deterministic algorithms, but floating-point results can differ across machines, Python
-and library builds. The submitted file was built from probabilities that reproduce the selected Sportec validation
-score (0.7283 against the manifest's 0.7282); `verify_best_model.py` compares exact SHA-256 hashes and will report a
-mismatch for member files trained on a different machine, even when scores agree to four decimals. The P3 member
-(`p3_10x10_501`) matches the manifest hashes exactly; P2, P4-30 and P4-20 were retrained locally and do not.
+From the saved weights the file is byte-identical (above). Retraining from scratch uses fixed seeds and deterministic
+algorithms, but floating-point results can differ across machines and library builds, so a retrain may differ in the
+last digits and `verify_best_model.py` (exact SHA-256 of the member probability files) can report a mismatch even when
+scores agree to four decimals. We retrained P2 on our machine and got byte-identical probabilities. P3 was trained
+on a teammate's machine (device `mps`, torch 2.15.0); its weights are in `weights/p3/`.

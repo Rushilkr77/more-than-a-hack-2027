@@ -12,6 +12,7 @@ import sys
 import time
 import xml.etree.ElementTree as ET
 
+import joblib
 import numpy as np
 import pandas as pd
 
@@ -128,6 +129,7 @@ def run(variant, split, data, seeds=(0,), aug=0, export_probas=False):
     }
     if export_probas:
         export(models, variant, split, os.path.join(OUT, tag))
+    joblib.dump(models, os.path.join(OUT, tag, "models.joblib"), compress=3)  # frozen weights: scripts/predict_bar_ath.py
     with open(os.path.join(OUT, tag, "meta.json"), "w") as file:
         json.dump(metadata, file, indent=2)
     return rows, metadata
