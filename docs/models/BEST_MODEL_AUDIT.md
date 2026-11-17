@@ -278,6 +278,21 @@ Protocol, fixed before scoring:
    both matches, and its 97-chunk interval is wholly positive. Do not load the
    held-out test or BAR-ATH and do not tune after the result.
 
+Result, clean run at commit `c39eda6`:
+
+| Decoder | Mean spellF1 / macroF1 | J03WMX | J03WOY | Mean chunk gain (95% CI) | Keep |
+|---|---:|---:|---:|---:|---|
+| Fixed Viterbi, penalty 20 | **0.7282 / 0.9121** | 0.6957 | 0.7607 | leader | yes |
+| Training-only boundary costs | 0.7253 / **0.9126** | 0.6950 | 0.7556 | -0.0030 [-0.0068, +0.0007] | **no** |
+
+The boundary detector has real discrimination (average precision 0.3720 and
+0.3802 versus boundary prevalences 0.0313 and 0.0328), but its cost correction
+reduces spellF1 on both matches. It is rejected without tuning. Together with
+E2, the evidence favors the fixed Viterbi decoder over both explicit duration
+modeling and input-dependent switch costs for the selected four-member hybrid.
+The exact event log, member hashes and empty test-load record are preserved in
+`docs/models/possession_boundary_logs/p2_gru30_gru20_p3.jsonl`.
+
 ## Test-set boundary
 
 No new candidate in this log may be selected from J03WQQ or BAR-ATH. Even if a
