@@ -1,0 +1,48 @@
+name: Model audit checks
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/model-audit.yml"
+      - "configs/best_model_selection.json"
+      - "scripts/blend.py"
+      - "scripts/verify_best_model.py"
+      - "src/decoder/**"
+      - "src/models/linear_stacker.py"
+      - "src/models/possession_boundary.py"
+      - "tests/test_blend.py"
+      - "tests/test_linear_stacker.py"
+      - "tests/test_possession_boundary.py"
+      - "tests/test_semi_markov.py"
+      - "tests/test_verify_best_model.py"
+      - "tests/test_viterbi.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install audit dependencies
+        run: >-
+          python -m pip install
+          numpy pandas pyarrow scikit-learn==1.7.2 pytest
+      - name: Validate selection manifest
+        run: python -m json.tool configs/best_model_selection.json >/dev/null
+      - name: Run data-independent audit tests
+        run: >-
+          python -m pytest -q
+          tests/test_blend.py
+          tests/test_linear_stacker.py
+          tests/test_possession_boundary.py
+          tests/test_semi_markov.py
+          tests/test_verify_best_model.py
+          tests/test_viterbi.py
