@@ -207,6 +207,77 @@ confirmation. The defensible conservative incumbent remains the three-member
 hybrid at 0.7151. A new independent match is the blocking evidence needed to
 resolve that uncertainty honestly.
 
+### E5 — match-cross-fitted linear stacking
+
+Equal averaging assumes every member and class are equally reliable. Learning
+weights on the same validation frames used for scoring would be leakage, while
+global manual weight searches were already exhausted by PR 16. Stacked
+generalization instead learns a second-level model from held-out base-model
+predictions:
+<https://doi.org/10.1016/S0893-6080(05)80023-1>.
+
+Protocol, fixed before scoring:
+
+1. Use only the four frozen validation probability tensors from P2, P4-30,
+   P4-20 and the original P3. Features are the 12 clipped log probabilities;
+   no match ID, frame index, label-derived feature or test input is allowed.
+2. Fit a standardized multinomial logistic stacker with fixed L2 `C=1`, LBFGS,
+   no class reweighting and no hyperparameter search.
+3. Fit on J03WMX adjusted labels and predict J03WOY; fit on J03WOY and predict
+   J03WMX. Thus every scored frame comes from a stacker that did not see that
+   match's labels. Fit a final deployment artifact on both only after cross-fit
+   predictions are frozen; do not score that in-sample artifact.
+4. Apply the common smoother once and select only from its existing penalty
+   grid. Compare the cross-fitted output against both the 0.7151 conservative
+   incumbent and 0.7282 equal-four-member point leader with the same 97-chunk
+   keep rule and per-match direction checks.
+5. Promote only if it exceeds 0.7282, improves both match aggregates, has
+   non-negative mean chunk direction on both, and passes the interval against
+   the incumbent. Do not tune `C`, feature subsets, sampling, class weights or
+   member sets after seeing the result.
+
+Result:
+
+| Candidate | SpellF1 / macroF1 | J03WMX | J03WOY | Mean chunk gain vs full P3 | Keep |
+|---|---:|---:|---:|---:|---|
+| Equal four-member P3 hybrid | **0.7282 / 0.9121** | 0.6957 | 0.7607 | leader | yes |
+| Match-cross-fitted stacker | 0.6997 / 0.9063 | 0.6731 | 0.7262 | -0.0151 [-0.0399, +0.0148] | **no** |
+
+The learned reliability weights do not transfer between the two validation
+matches. The stacker also loses to the conservative three-member incumbent,
+with a negative J03WOY mean chunk gain of -0.0273. It is rejected; the final
+two-match artifact is retained only for reproducibility and must not be called
+the selected model. No stacker setting is tuned.
+
+### E6 — learned boundary costs on the four-member point leader
+
+The sibling `codex/possession-boundary` branch already tested a training-only
+boundary detector on the regenerated three-member hybrid. With identical
+probabilities it raised spellF1 from 0.7151 to 0.7173, improved both whole
+matches, but failed the keep interval. A restart-segment branch made no edits.
+Those experiments are existing evidence and will not be repeated or tuned.
+
+The remaining untested interaction is whether P3's complementary probabilities
+and input-dependent switch costs help together. The detector follows the
+boundary-aware temporal segmentation motivation of Ishikawa et al.:
+<https://arxiv.org/abs/2007.06866>.
+
+Protocol, fixed before scoring:
+
+1. Import the exact `codex/possession-boundary` v1 implementation: schema-03
+   team-symmetric tracking features, ±0.4-second context, targets within ±0.2
+   seconds of a raw-label change, every fifth training frame, and the fixed
+   120-iteration histogram tree. Do not change its columns or parameters.
+2. Train only on the four training matches. Use the frozen P2, P4-30, P4-20
+   and original P3 probabilities in an equal arithmetic blend.
+3. Decode both baseline and candidate at fixed penalty 20. Candidate switch
+   cost is the detector's training-prior log-odds correction bounded to ±10;
+   there is no validation-selected threshold or new penalty search.
+4. Compare against the same four-member fixed decoder. Promote only if the
+   candidate exceeds 0.7282, improves aggregate and mean chunk direction on
+   both matches, and its 97-chunk interval is wholly positive. Do not load the
+   held-out test or BAR-ATH and do not tune after the result.
+
 ## Test-set boundary
 
 No new candidate in this log may be selected from J03WQQ or BAR-ATH. Even if a

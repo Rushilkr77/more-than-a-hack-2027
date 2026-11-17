@@ -7,7 +7,10 @@ spans halftime. Penalties are tuned on the validation matches against labels_adj
 - team_penalty / dead_penalty: optional separate costs for H<->A and for live<->D changes (default: switch_penalty).
 - min_frames: optional minimum spell length (a spell can only end after this many frames; the last spell of a period
   may be shorter). 1 = no minimum.
+- frame_switch_cost: optional cost of changing into each frame; period starts ignore this cost.
 """
+
+from typing import Optional
 
 import numpy as np
 
@@ -25,7 +28,7 @@ def _viterbi(logp, P):
     back = np.zeros((n, k), dtype=np.int8)
     score = logp[0].copy()
     for t in range(1, n):
-        cand = score[:, None] - P                      # [from, to]
+        cand = score[:, None] - (P[t] if P.ndim == 3 else P)  # [from, to]
         back[t] = cand.argmax(axis=0)
         score = cand.max(axis=0) + logp[t]
     path = np.empty(n, dtype=np.int8)
@@ -61,13 +64,25 @@ def _viterbi_min(logp, P, L):
     return (path // L).astype(np.int8)
 
 
-def smooth(proba, period, switch_penalty, team_penalty=None, dead_penalty=None, min_frames=1):
+def smooth(proba, period, switch_penalty, team_penalty=None, dead_penalty=None, min_frames=1,
+           *, frame_switch_cost: Optional[np.ndarray] = None) -> np.ndarray:
     """proba: [frames, 3] columns H, A, D. period: [frames]. Returns an array of 'H' / 'A' / 'D'."""
     logp = np.log(np.clip(np.asarray(proba, float), 1e-6, 1.0))
     P = _penalties(switch_penalty, team_penalty, dead_penalty)
     period = np.asarray(period)
+    if frame_switch_cost is not None:
+        costs = np.asarray(frame_switch_cost, dtype=float)
+        if costs.shape != (len(logp),) or not np.isfinite(costs).all() or (costs < 0).any():
+            raise ValueError("frame_switch_cost must have one finite, non-negative value per frame")
+        if min_frames != 1 or team_penalty is not None or dead_penalty is not None:
+            raise ValueError("frame_switch_cost requires the default transition and duration options")
+        P = costs[:, None, None] * _penalties(1)
+    if not len(logp):
+        return LABELS[:0]
     out = np.empty(len(logp), dtype=np.int8)
     edges = np.r_[0, np.flatnonzero(np.diff(period)) + 1, len(period)]
     for a, b in zip(edges[:-1], edges[1:]):
-        out[a:b] = _viterbi_min(logp[a:b], P, min_frames) if min_frames > 1 else _viterbi(logp[a:b], P)
+        transitions = P[a:b] if frame_switch_cost is not None else P
+        out[a:b] = (_viterbi_min(logp[a:b], transitions, min_frames)
+                    if min_frames > 1 else _viterbi(logp[a:b], transitions))
     return LABELS[out]
