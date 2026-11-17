@@ -299,3 +299,12 @@ No new candidate in this log may be selected from J03WQQ or BAR-ATH. Even if a
 candidate passes validation, those previously viewed sets can only be reported
 as non-independent context. A new independent match would be required for a
 clean final generalization claim.
+
+The user requested a report-only BAR-ATH check after selection. It was not run:
+the gated tactical tracking bundle is absent from this checkout and from
+`MTAH_DATA_DIR`; `.gitignore` intentionally excludes it under the challenge's
+redistribution terms. The 0.7282 selection score therefore comes only from the
+two full Sportec validation matches, never from the five-minute public window.
+`scripts/export_p3_bar_ath.py` completes the missing frozen-P3 export path once
+the authorized bundle is restored. Any future BAR-ATH score remains a sanity
+report and cannot change members, weights, decoder or penalty.
