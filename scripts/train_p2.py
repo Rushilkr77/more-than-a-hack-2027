@@ -17,6 +17,7 @@ import pandas as pd
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 from src.common import keep_rule
 from src.common import sportec
@@ -121,6 +122,7 @@ def run(variant, split, data, seeds=(0,), aug=0, export_probas=False):
     metadata = {
         "version": tag, "features": X.shape[1], "train_rows": len(X), "seeds": list(seeds), "aug_copies": aug,
         "iterations": [int(model.n_iter_) for model in models],
+        "early_stopping_validation": [model.p2_validation_mode_ for model in models],
         "switch_penalty": penalty, "penalty_curve": {str(key): round(value, 4) for key, value in curve.items()},
         "seconds": round(time.time() - t0, 1),
     }

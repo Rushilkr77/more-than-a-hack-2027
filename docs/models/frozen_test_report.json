@@ -1,0 +1,42 @@
+{
+  "commit": "aa3512e648a8c024796aac6f0cb1bec19ea8ac9e",
+  "working_tree_dirty": false,
+  "report_only": true,
+  "selection_changed": false,
+  "test_previously_viewed": true,
+  "match": "J03WQQ",
+  "members": [
+    "outputs/p2/h_sd_win_1_5_15_ens",
+    "outputs/p4/04_g0_w30_s5_aug2_ens",
+    "outputs/p4/04_g0_w20_s5_aug2_ens",
+    "outputs/p3_10x10_501/schema_04"
+  ],
+  "probability_sha256": {
+    "outputs/p2/h_sd_win_1_5_15_ens": "feb25e0a5fbf1ea91107a0490a73b711150517bb18389c3a0992920ce83ad2f6",
+    "outputs/p4/04_g0_w30_s5_aug2_ens": "318c62308256f13bbd97c3ad4e1fce483a16218a1421cd5c97128b7924bc5e10",
+    "outputs/p4/04_g0_w20_s5_aug2_ens": "16097abdaeea890d96e0cbbd39049dc146ab8f383066a353e8f2f82db118d8ae",
+    "outputs/p3_10x10_501/schema_04": "651246f3f930a63f90d855103e532ddf38acc051401ec945a3ae47b1560dafd1"
+  },
+  "switch_penalty": 20,
+  "control_three_member": {
+    "spellF1": 0.7160493827160493,
+    "macroF1": 0.9104987648009991,
+    "spells": 273,
+    "mean_s": 12.345201465201464,
+    "true_spells": 294
+  },
+  "selected_four_member": {
+    "spellF1": 0.7237076648841354,
+    "macroF1": 0.9097115293069183,
+    "spells": 267,
+    "mean_s": 12.626367041198503,
+    "true_spells": 294
+  },
+  "selected_vs_control_keep_rule": {
+    "mean_gain": 0.0011038282475813366,
+    "ci95": [-0.008993496520624783, 0.011401977760890112],
+    "chunks": 47,
+    "keep": false
+  },
+  "test_matches_loaded": ["J03WQQ"]
+}

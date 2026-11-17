@@ -67,3 +67,6 @@ env/
 cache/
 outputs/
 .pytest_cache/
+
+# -- final submission files (labels for the whole match; uploaded via the form, not committed) --
+submission/
