@@ -315,3 +315,22 @@ two full Sportec validation matches, never from the five-minute public window.
 `scripts/export_p3_bar_ath.py` completes the missing frozen-P3 export path once
 the authorized bundle is restored. Any future BAR-ATH score remains a sanity
 report and cannot change members, weights, decoder or penalty.
+
+### E7 — frozen-candidate Sportec test report
+
+J03WQQ is not an independent holdout: earlier P2, P3, P4 and PR 16 work already
+reported it. After the candidate and artifact hashes were frozen, it can still
+serve as non-independent collapse evidence. This report is deliberately after
+selection and cannot promote, demote or tune a candidate.
+
+Protocol, fixed before loading the new candidate's test probabilities:
+
+1. Reuse the saved P2 and P4 seed models and the selected P3 artifact. Export
+   J03WQQ probabilities without retraining or choosing a seed.
+2. Compare the equal P2 + P4-30 + P4-20 control with the equal four-member
+   candidate. Decode both exactly once at the manifest's fixed penalty 20; do
+   not inspect another penalty, weight, member subset or decoder.
+3. Report spellF1, macroF1, predicted spell count and the paired chunk interval.
+   Record test probability hashes and `previously_viewed: true`.
+4. Regardless of direction, leave `configs/best_model_selection.json`
+   unchanged. Only a genuinely new match can resolve selection uncertainty.
