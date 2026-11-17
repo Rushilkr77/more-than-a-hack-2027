@@ -80,4 +80,6 @@ output=outputs/possession_boundary/v1_p2_gru30
 keep=false
 ```
 
-The three-member comparison is pending regeneration of the GRU-20 artifacts.
+The [two-member JSONL](possession_boundary_logs/p2_gru30.jsonl) preserves the
+exact run events and input hashes. The three-member comparison is pending
+regeneration of the GRU-20 artifacts.

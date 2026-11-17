@@ -19,11 +19,11 @@ def test_constant_frame_cost_matches_existing_smoother() -> None:
 def test_viterbi_uses_cost_of_entering_frame_and_resets_at_half() -> None:
     probabilities = np.array([[0.89, 0.1, 0.01], [0.89, 0.1, 0.01],
                               [0.1, 0.89, 0.01], [0.1, 0.89, 0.01],
-                              [0.1, 0.89, 0.01], [0.1, 0.89, 0.01]])
+                              [0.89, 0.1, 0.01], [0.89, 0.1, 0.01]])
     period = np.array([1, 1, 1, 1, 2, 2])
     costs = np.array([20, 20, 0, 20, 200, 20])
     result = smooth(probabilities, period, 20, frame_switch_cost=costs)
-    np.testing.assert_array_equal(result, ["H", "H", "A", "A", "A", "A"])
+    np.testing.assert_array_equal(result, ["H", "H", "A", "A", "H", "H"])
 
 
 @pytest.mark.parametrize("costs", [[1], [1, -1], [1, np.nan]])
