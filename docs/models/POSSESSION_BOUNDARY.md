@@ -81,5 +81,34 @@ keep=false
 ```
 
 The [two-member JSONL](possession_boundary_logs/p2_gru30.jsonl) preserves the
-exact run events and input hashes. The three-member comparison is pending
-regeneration of the GRU-20 artifacts.
+exact run events and input hashes.
+
+### Full three-member comparison
+
+Run revision `825818e`, clean tree, same boundary training settings. The complete
+equal-weight P2 / GRU-30 / GRU-20 recipe used a three-seed ensemble for each
+member. GRU-20 seeds 0/1/2 trained for 12/11/12 epochs on CPU PyTorch 2.14.1.
+Both GRU-30 validation probability files were byte-identical between local
+PyTorch 2.8.0 and 2.14.1 reruns. The regenerated fixed-cost blend scored 0.7151,
+compared with the 0.727 published by PR #16; the original arrays were not
+available. Both columns below use the same regenerated probabilities.
+
+| Match | Fixed spell-F1 | Learned spell-F1 | Fixed macro-F1 | Learned macro-F1 | Fixed / learned / true spells |
+|---|---:|---:|---:|---:|---:|
+| J03WMX | 0.67616 | 0.67979 | 0.91317 | 0.91439 | 248 / 255 / 314 |
+| J03WOY | 0.75405 | 0.75481 | 0.90899 | 0.90935 | 277 / 278 / 315 |
+| Mean | 0.71511 | 0.71730 | 0.91108 | 0.91187 | |
+
+Paired mean chunk gain **+0.00266**, 95% interval **[-0.00543, +0.01396]**,
+97 chunks. Whole-match gains were positive on both matches, but the interval
+failed the keep rule. The [full JSONL](possession_boundary_logs/p2_gru30_gru20.jsonl)
+records the split, probability hashes, training counts and per-match results.
+Local run directory: `outputs/possession_boundary/v1_full`.
+
+### Final decision
+
+Keep the fixed-cost decoder for the existing blend. The trained boundary model
+improves the point estimate by 0.00219 on the regenerated full recipe. That
+magnitude and the interval are insufficient to promote it to a submission
+candidate. The held-out Sportec match and BAR-ATH were left untouched by this
+experiment. The full suite passed with 102 tests and 6 skips.
