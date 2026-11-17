@@ -131,11 +131,13 @@ pip install -r requirements-p3.txt       # P3 TCN (use a second venv if the torc
    mkdir -p data/sportec
    while read -r url name md5; do curl -L -o "data/sportec/$name" "$url"; done < data/sportec/manifest.txt
    ```
-   Check the downloads against the MD5 column (`md5 -r` on macOS, `md5sum` on Linux). The manifest ships in the
+   The full set is about 2.5 GB (21 files; the positions files are the large ones). Check the downloads against the MD5 column (`md5 -r` on macOS, `md5sum` on Linux). The manifest ships in the
    repository; the downloaded XML files do not (`data/` is git-ignored).
 3. **Build the degraded training bundles and labels** (deterministic, fixed seed per match):
    ```bash
    python scripts/build_sportec_bundles.py          # writes data/sportec_bundles/ and data/sportec_labels/
+   # a few minutes per match (7 matches); add --match J03WMX to build one. Output is deterministic: our rebuild of J03WMX
+   # was byte-identical to the bundle the models were trained on.
    ```
    Split: `configs/sportec_split.json`.
 
