@@ -334,3 +334,17 @@ Protocol, fixed before loading the new candidate's test probabilities:
    Record test probability hashes and `previously_viewed: true`.
 4. Regardless of direction, leave `configs/best_model_selection.json`
    unchanged. Only a genuinely new match can resolve selection uncertainty.
+
+Result, clean run from predeclared commit `aa3512e`:
+
+| Frozen candidate | SpellF1 | MacroF1 | Predicted / true spells |
+|---|---:|---:|---:|
+| P2 + P4-30 + P4-20 control | 0.71605 | **0.91050** | 273 / 294 |
+| + original P3 | **0.72371** | 0.90971 | 267 / 294 |
+
+Adding P3 improves the third-match point spellF1 by 0.00766 and does not
+collapse outside the two validation matches. The 47-chunk mean gain is only
++0.00110 with a 95% interval of [-0.00899, +0.01140], and macroF1 falls by
+0.00079. This is directionally consistent context, not statistically decisive
+or independent evidence. Selection and all frozen settings remain unchanged.
+The exact member hashes and result are in `docs/models/frozen_test_report.json`.

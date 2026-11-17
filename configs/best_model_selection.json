@@ -47,7 +47,17 @@
     "validation_spellF1": 0.7151053188419736,
     "validation_macroF1": 0.9110830508723848
   },
-  "test_policy": "J03WQQ and BAR-ATH were previously viewed and were not loaded for these new decisions; obtain a new independent match for confirmation",
+  "test_policy": "J03WQQ and BAR-ATH were previously viewed and were not loaded for selection decisions; J03WQQ was scored only after the candidate and protocol were frozen, selection remained unchanged, and a new independent match is still required",
+  "post_selection_context": {
+    "independent": false,
+    "selection_changed": false,
+    "sportec_test_report": "docs/models/frozen_test_report.json",
+    "control_three_member_spellF1": 0.7160493827160493,
+    "selected_four_member_spellF1": 0.7237076648841354,
+    "selected_vs_control_chunk_gain_mean": 0.0011038282475813366,
+    "selected_vs_control_chunk_gain_ci95": [-0.008993496520624783, 0.011401977760890112],
+    "keep_rule_passed": false
+  },
   "reproduce_candidate": "python scripts/blend.py --name audit_p2_p4w30_p4w20_p3 --members outputs/p2/h_sd_win_1_5_15_ens outputs/p4/04_g0_w30_s5_aug2_ens outputs/p4/04_g0_w20_s5_aug2_ens outputs/p3_10x10_501/schema_04",
   "verify_candidate": "python scripts/verify_best_model.py"
 }
